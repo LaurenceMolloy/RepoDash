@@ -2,15 +2,13 @@
 <html>
 	<head>
 		<title>RepoDash - Create visual metrics of your Github Issues</title>
-	</head>
-	<body>
-		<nav>
     		<ul>
-            <li><a href="/about">Requirements</a></li>
+                        <li><a href="/about">Requirements</a></li>
 	        	<li><a href="/about">User Guide</a></li>
         		<li><a href="/cv">Technical Documentation</a></li>
-    		</ul>
-		</nav>
+		</ul>
+	</head>
+	<body>
 		<div class="container">
     		<div class="blurb">
         		<h1>Welcome to RepoDash</h1>
