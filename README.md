@@ -1,8 +1,6 @@
 <html>
-	<head>
-		<title>RepoDash - Create visual metrics of your Github Issues</title>
-	</head>
 	<body>
+		![Screenshot](docs/images/RepDash-screenshot.png)
 		<div class="container">
     		<div class="blurb">
         		<h1>Welcome to RepoDash</h1>
