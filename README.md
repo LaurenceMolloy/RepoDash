@@ -1,6 +1,6 @@
 <html>
 	<body>
-		![Screenshot](docs/images/RepDash-screenshot.png)
+		![Screenshot](docs/images/RepoDash_screenshot.png)
 		<div class="container">
     		<div class="blurb">
         		<h1>Welcome to RepoDash</h1>
