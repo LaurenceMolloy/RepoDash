@@ -33,7 +33,7 @@ repo = "matplotlib"
 
 ga.next_page_url = f"https://api.github.com/repos/{account}/{repo}/issues?state=all&direction=asc&per_page=100&page=1"
 
-for page in range(1,4):
+for page in range(1,16):
     ga.get_next_page()
     for issue in ga.response.json():
         db.insert_issue(issue)
@@ -115,7 +115,7 @@ for color in newcolors:
 # monthly time block separation space
 bar_spacing = 0.1
 
-fig, ax = plt.subplots(3, 1, figsize=(14, 9), constrained_layout=False)
+fig, ax = plt.subplots(3, 1, figsize=(16, 9), constrained_layout=False)
 title = f"Analysis of {db.get_repo_name()} Github issues for period {gd.month_labels[w_start+1]} to {gd.month_labels[w_end-1]}"
 fig.suptitle(title, fontsize=14)
 
