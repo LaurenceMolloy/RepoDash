@@ -1,4 +1,5 @@
 import re
+import sys, argparse
 from pandas.tseries.offsets import MonthEnd
 from GithubIssues import *
 
@@ -8,6 +9,7 @@ from matplotlib.colors import to_rgba, ListedColormap
 import matplotlib.patches as mpatches
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import numpy as np
+import pandas as pd
 
 
 #################################################################
@@ -18,8 +20,19 @@ import numpy as np
 ### MATPLOTLIB: https://matplotlib.org/3.1.1/tutorials        ###
 #################################################################
 
-path_to_data = "../data"
+parser=argparse.ArgumentParser()
+parser.add_argument('-u', '--user', type=str, default='matplotlib',
+                    help="Github user name (default='matplotlib')")
+parser.add_argument('-r', '--repo', type=str, default='matplotlib',
+                    help="Github repo name (default='matplotlib')")
+parser.add_argument('-t', '--type', type=str, choices=['issue','pr'], default='issue',
+                    help="Issue type, one of ['issue','pr'] (default='issue')")
+parser.add_argument('-m', '--months', type=int, default=12,
+                    help="analysis timespan in months (default=12)")
+parser.add_argument('-d', '--refdate', type=pd.Timestamp, default=pd.datetime.now(),
+                    help="reference date (default=now)")
 
+path_to_data = "../data"
 
 ga  = GithubIssuesAPI()
 db  = GithubIssuesDB(f'{path_to_data}/issues', 'issues', echo=False)
@@ -28,18 +41,22 @@ gd  = GithubIssuesData()
 db.drop_table  ()
 db.create_table()
 
-account = "matplotlib"
-repo = "matplotlib"
+args=parser.parse_args()
+account = vars(args)['user']
+repo = vars(args)['repo']
+issue_type = vars(args)['type']
+timespan = vars(args)['months']
+ref_date = vars(args)['refdate']
 
 ga.next_page_url = f"https://api.github.com/repos/{account}/{repo}/issues?state=all&direction=asc&per_page=100&page=1"
 
-for page in range(1,16):
+for page in range(1,2):
     ga.get_next_page()
     for issue in ga.response.json():
         db.insert_issue(issue)
 
 if db.count_records("issue") == 0:
-    print ("NO DATA STORED")
+    print ("NO DATA FOUND")
     exit()
 
 # get end of month dates for earliest created and latest issues 
