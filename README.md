@@ -31,9 +31,8 @@ your codebase is managed via Github, RepoDash could be just what you need.</p>
 by default. To analyse your own project repository, simply provide your github user name and repository 
 name on the command line. It couldn't be simpler.</p>
 
-<p><sup>1</sup> matplotlib is a popular open science plotting library for python which is utilised by RepDash to 
-generate its data visualisations</p>
-
 <p>The current version of RepoDash has only been tested with open source (public) projects. However, there
 are plans to make sure it works with private ones as well... watch this space!</p>
 
+<sup>1</sup> *matplotlib is a popular open science plotting library for python which is utilised by RepDash to 
+generate its data visualisations*
