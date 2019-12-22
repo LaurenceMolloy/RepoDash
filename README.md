@@ -5,12 +5,13 @@
 <p>Do you maintain a project codebase on Github? Would you like to be able to collate statistics 
 that summarise historic monthly activity on that codebase and see, at a glance, how that impacts 
 the project issues list over time? Would you like to be able to perform this analysis for any 
-given time period of your choosing, perhaps to compare one year's performance against the next?</p>
+given time period of your choosing?</p>
 
 <p>RepoDash can do this for any project on Github. It uses the Github API to collect repository 
 data and generate a data visualisation of a range of historic monthly metrics of the project 
 issues list over a user-specified period of time, including:</p>
 
+<p>
 <ul>
 <li>How many new issues were created?</li>
 <li>How many existing issues were resolved?</li>
@@ -19,7 +20,8 @@ issues list over a user-specified period of time, including:</p>
 <li>How long, on average have open issues been in the isssues list?</li>
 <li>What was the spread of issue ages in the issues list?</li>
 </ul>
- 
+</p> 
+
 <p>Perhaps you are managing an open source project, the maintenance of which you'd like to keep on top 
 of. Or perhaps you manage a software project at work where you are required to provide your boss with 
 exective summary updates of your support team's progress on an ongoing monthly basis. Either way, if 
