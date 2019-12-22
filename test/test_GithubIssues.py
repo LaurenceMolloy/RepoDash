@@ -3,6 +3,13 @@ import sys
 sys.path.insert(0, "../src/")
 from GithubIssues import GithubIssuesAPI, GithubIssuesDB, GithubIssuesData
 
+# TODO: add argparse tests
+# user: valid / invalid / missing / abbreviated option
+# repo: valid / invalid / missing / abbreviated option
+# type: valid / invalid / missing / abbreviated option
+# months: valid / invalid / missing / abbreviated option
+# refdate: valid / invalid / missing / abbreviated option
+
 # import re
 # from pandas.tseries.offsets import MonthEnd
 # import matplotlib.pyplot as plt
