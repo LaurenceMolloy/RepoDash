@@ -12,12 +12,12 @@ data and generate a data visualisation of a range of historic monthly metrics of
 issues list over a user-specified period of time, including:</p>
 
 <ul>
-<li>How many new issues were created?
-<li>How many existing issues were resolved?
-<li>For all issue activity in a month, what was the percentage split between opened / closed?
-<li>What was the rate of growth/reduction of the issues list?
-<li>How long, on average have open issues been in the isssues list?
-<li>What was the spread of issue ages in the issues list?
+<li>How many new issues were created?</li>
+<li>How many existing issues were resolved?</li>
+<li>For all issue activity in a month, what was the percentage split between opened / closed?</li>
+<li>What was the rate of growth/reduction of the issues list?</li>
+<li>How long, on average have open issues been in the isssues list?</li>
+<li>What was the spread of issue ages in the issues list?</li>
 </ul>
  
 <p>Perhaps you are managing an open source project, the maintenance of which you'd like to keep on top 
@@ -29,9 +29,9 @@ your codebase is managed via Github, RepoDash could be just what you need.</p>
 by default. To analyse your own project repository, simply provide your github user name and repository 
 name on the command line. It couldn't be simpler.</p>
 
-<sup>1</sup> *matplotlib is a popular open science plotting library for python which is utilised by RepDash to 
-generate its data visualisations*
+<p><sup>1</sup> matplotlib is a popular open science plotting library for python which is utilised by RepDash to 
+generate its data visualisations</p>
 
-<p>**The current version of RepoDash has only been tested with open source (public) projects. However, there
-are plans to make sure it works with private ones as well... watch this space!**</p>
+<p>The current version of RepoDash has only been tested with open source (public) projects. However, there
+are plans to make sure it works with private ones as well... watch this space!</p>
 
