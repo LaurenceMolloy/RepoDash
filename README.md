@@ -8,17 +8,18 @@ the project issues list over time? Would you like to be able to perform this ana
 given time period of your choosing?</p>
 
 <p>RepoDash can do this for any project on Github. It uses the Github API to collect repository 
-data and generate a data visualisation of a range of historic monthly metrics of the project 
-issues list over a user-specified period of time, including:</p>
+data and generate a data visualisation of a range of historic metrics of the project issues list 
+over a user-specified period of time. For each calendar month in the time period of interest, 
+it displays the following metrics:</p>
 
 <p>
 <ul>
-<li>How many new issues were created?</li>
-<li>How many existing issues were resolved?</li>
-<li>For all issue activity in a month, what was the percentage split between opened / closed?</li>
-<li>What was the rate of growth/reduction of the issues list?</li>
-<li>How long, on average have open issues been in the isssues list?</li>
-<li>What was the spread of issue ages in the issues list?</li>
+<li>The number of new issues created</li>
+<li>The number of existing issues resolved</li>
+<li>The percentage split between opened / closed issues</li>
+<li>The total number of open issues in the issues list (month start & month end)</li>
+<li>The change in total number of open issues over the month</li>
+<li>The average age and age spread of open issues been in the isssues list</li>
 </ul>
 </p> 
 
@@ -28,11 +29,11 @@ exective summary updates of your support team's progress on an ongoing monthly b
 your codebase is managed via Github, RepoDash could be just what you need.</p>
 
 <p>For demo purposes, this code displays the most recent 12 months of matplotlib<sup>1</sup> metrics 
-by default. To analyse your own project repository, simply provide your github user name and repository 
-name on the command line. It couldn't be simpler.</p>
+by default. Command line arguments allow you to set your own project repository and analysis timeframe. 
+It couldn't be simpler.</p>
 
-<p>The current version of RepoDash has only been tested with open source (public) projects. However, there
-are plans to make sure it works with private ones as well... watch this space!</p>
+<p>Note: The current version of RepoDash has only been tested with open source (public) projects. However, 
+there are plans to ensure that it works with private ones as well... watch this space!</p>
 
 <sup>1</sup> *<a href="https://matplotlib.org/"><strong>matplotlib</strong></a> is a popular open science 
-plotting library for python which is utilised by RepDash to generate its data visualisations*
+plotting library for python which is utilised by RepoDash to generate its data visualisations*
