@@ -23,14 +23,14 @@ metrics:</p>
 </ul>
 </p> 
 
-<h2>Typical Use Cases</h2>
+<h3>Typical Use Cases</h3>
 
 <p>Perhaps you are managing an open source project, the maintenance of which you'd like to keep on top 
 of. Or perhaps you manage a software product at work where you are required to provide your boss with 
 exective summary updates of your support team's progress on an ongoing monthly basis. Either way, if 
 your codebase is managed via Github, RepoDash could be just what you need.</p>
 
-<h1>Demo Mode</h1>
+<h3>Demo Mode</h3>
 
 <p>For demo purposes, this code displays the most recent 12 months of matplotlib<sup>1</sup> metrics 
 by default. Command line arguments allow you to set your own project repository and analysis timeframe. 
@@ -39,7 +39,7 @@ It couldn't be simpler.</p>
 <sup>1</sup> *<a href="https://matplotlib.org/"><strong>matplotlib</strong></a> is a popular open science 
 plotting library for python which is utilised by RepoDash to generate its data visualisations*
 
-<h2>Future Development</h2>
+<h3>Future Development</h3>
 
 <p>This project is a work in progress. The current version of RepoDash has only been tested with open 
 source (public) projects. However, there are plans to ensure that it works with private ones as well. 
