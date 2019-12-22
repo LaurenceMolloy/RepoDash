@@ -2,25 +2,36 @@
 
 <h1>Welcome to RepoDash</h1>
 
-<p>Do you maintain a project codebase on Github? 
-Do you spend an awful lot of your time managing your project's issues list? 
-Would you like to be able to take a step back and answer key questions, such as:</p>
+<p>Do you maintain a project codebase on Github? Would you like to be able to collate statistics 
+that summarise historic monthly activity on that codebase and see, at a glance, how that impacts 
+the project issues list over time? Would you like to be able to perform this analysis for any 
+given time period of your choosing, perhaps to compare one year's performance against the next?</p>
+
+<p>RepoDash can do this for any project on Github. It uses the Github API to collect repository 
+data and generate a data visualisation of a range of historic monthly metrics of the project 
+issues list over a user-specified period of time, including:</p>
 
 <ul>
-<li>Do you have it under control?</li>
-<li>Can you resolve issues faster than they are created?</li> 
-<li>On average, how long do issues remain on the list before they are resolved?</li>
+<li>How many new issues were created?
+<li>How many existing issues were resolved?
+<li>For all issue activity in a month, what was the percentage split between opened / closed?
+<li>What was the rate of growth/reduction of the issues list?
+<li>How long, on average have open issues been in the isssues list?
+<li>What was the spread of issue ages in the issues list?
 </ul>
+ 
+<p>Perhaps you are managing an open source project, the maintenance of which you'd like to keep on top 
+of. Or perhaps you manage a software project at work where you are required to provide your boss with 
+exective summary updates of your support team's progress on an ongoing monthly basis. Either way, if 
+your codebase is managed via Github, RepoDash could be just what you need.</p>
 
-<p>To answer questions like these, I have created a tool that uses the Github API to generate a 
-data visualisation that displays some key metrics of the Github issues list of any Github project. 
-This could be just what you need to provide your boss with a clear and unambiguous exective summary 
-of your team's progress, a kind of support and maintenance state-of-the-union. Or perhaps you have 
-a personal project, the maintenance of which you'd like to keep on top of.</p>
+<p>For demo purposes, this code displays the most recent 12 months of matplotlib<sup>1</sup> metrics 
+by default. To analyse your own project repository, simply provide your github user name and repository 
+name on the command line. It couldn't be simpler.</p>
 
-<p>This code displays matplotlib metrics by default (a popular open science plotting library for python). 
-To point it at your project, simply provide your account name and repository name on the command line.
-It couldn't be simpler.</p>
+<sup>1</sup> *matplotlib is a popular open science plotting library for python which is utilised by RepDash to 
+generate its data visualisations*
 
-<p>NOTE: This has only been tested with open source (public) projects right now, but I have plans to make 
-sure it works with private ones as well... watch this space!</p>
+<p>**The current version of RepoDash has only been tested with open source (public) projects. However, there
+are plans to make sure it works with private ones as well... watch this space!**</p>
+
