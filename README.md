@@ -34,5 +34,5 @@ name on the command line. It couldn't be simpler.</p>
 <p>The current version of RepoDash has only been tested with open source (public) projects. However, there
 are plans to make sure it works with private ones as well... watch this space!</p>
 
-<sup>1</sup> *matplotlib is a popular open science plotting library for python which is utilised by RepDash to 
-generate its data visualisations*
+<sup>1</sup> *<a href="https://matplotlib.org/"><strong>matplotlib</strong></a> is a popular open science 
+plotting library for python which is utilised by RepDash to generate its data visualisations*
