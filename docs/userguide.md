@@ -1,2 +1,2 @@
 
-<p>User guide coming soon</p>
+User guide coming soon
