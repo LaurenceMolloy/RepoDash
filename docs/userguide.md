@@ -1,5 +1,31 @@
 <h1>Using RepoDash</h1>
 
+<h3>Pre-requisites</h3>
+
+Repodash was written with and tested against python 3 (version 3.7.3). It hasn't been tested against 
+earlier versions Python. If you're using an earlier version of python and it works for you, please
+let us know so we can add it to the list of known supported versions of python.
+
+Repodash makes use of the following python modules, some of which are included in the core python 3.7.3 installation, 
+others will require installation:
+
+- os
+- sys
+- argparse
+- re
+- requests
+- pandas
+- numpy
+- calendar
+- sqlalchemy
+- dateutil
+- matplotlib
+- pytest, pytest-flake8, pytest-mypy (for unit testing)
+
+If you're missing any of these modules you can install them on the command line using the following command:
+
+    python3 -mpip install MODULE_NAME
+
 <h3>Installing and Running RepoDash in Demo Mode</h3>
 
 To download RepoDash from Github and run it in default (demo) mode, open a terminal window and 
@@ -73,10 +99,11 @@ the command line (-months 6).
 **Notes**
 <p>
 <ol>
-<li>there are only 5 months of metrics in the dashboard below. This is because the issues data found within pages 
-100-111 of the issues list only spans 5 months (May 2015 - Sept 2015).</li>
-<li>RepoDash has no knowledge of prior existing open issues in the list and thus presumes an empty list prior to May 2015 
-for simplicity. The Total Open Issues count is therefore relative to the count at the end of April 2015.</li>
+<li>There are only 5 months of metrics in the dashboard below. This is because the data found within pages 100-111 of the 
+issues list only spans 5 usable months (May 2015 - Sept 2015). There is data for April 2015 but it's only used to calculate
+the total issues count at the start of May 2015 and is ignored for all other purposes.</li>
+<li>RepoDash has no knowledge of prior existing open issues in the list and thus presumes an empty list prior to April 2015 
+for simplicity. The Total Open Issues count is therefore relative to a zero count at the start of April 2015.</li>
 </ol>
 </p>
 
