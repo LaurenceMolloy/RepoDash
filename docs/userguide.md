@@ -1,50 +1,81 @@
-<h1>Running RepoDash</h1>
+<h1>Using RepoDash</h1>
 
+<h3>Installing and Running RepoDash in Demo Mode</h3>
 
-- cd <GIT FOLDER>
-- git clone https://github.com/LaurenceMolloy/RepoDash.git
-- cd RepoDash/src
+To download RepoDash from Github and run it in default (demo) mode, open a terminal window and 
+type the following commands 
 
-To run the program in default (demo) mode, simply type 
-
+    cd YOUR-CHOICE-OF-FOLDER
+    git clone https://github.com/LaurenceMolloy/RepoDash.git
+    cd RepoDash/src
     python3 RepoDash.py
 
-This will read in the first 10 pages of the matplotlib repository issues, 1000 issues in all, 
-and plot metrics for the latest 12 months of issues of type 'issue' found (i.e. not pull-requests, 
-which are also reported along with issues in the Github API).
+This reads in the first 10 pages of the matplotlib repository issues list, 1000 issues in all, 
+and plots metrics for the most recent 12 months of issues read in.
 
-You can configure Repodash to run against any repository, requesting any number of pages starting 
-from any specific page of issues as well as output any number of months of metrics up to any 
-specified month.
+<h3>Running RepoDash With Command Line Arguments</h3>
 
-If you specify a refernce date for metrics and/or timespan that falls outside of the date range of 
-the issues data collected, RepoDash will do its best to adjust the dates and/or shorten the analysis 
-timespan so that it maps to the data available.
+By using command line arguments, you can run RepoDash against any public Github repository, request 
+any number of pages starting from any specific page of the issues list, and output issues list metrics
+for any time period of your choosing. The available command line options are as follows:
 
-Command line options:
+<table>
+<tr><th>-u, --user</th>          <th>Github username or account</th>              <th>(default: 'matplotlib')</th></tr>
+<tr><th>-r, --repo</th>          <th>Github repository name</th><th>              <th>(default: 'matplotlib')</th></tr>
+<tr><th>-t, --type</th>          <th>Issue type ('issue', 'pull_request')</th>    <th>(default: 'issue')</th></tr>
+<tr><th>-m, --months</th>        <th>plot metric analysis timespan in months</th> <th>(default: 12)</th></tr>
+<tr><th>-d, --refdate</th>       <th>plot metric reference end date</th>          <th>(default: now)</th></tr>
+<tr><th>-f, --firstpage</th>     <th>first page number to request</th>            <th>(default: 1)</th></tr>
+<tr><th>-c, --pagecount</th>     <th>number of pages of issues to request</th>    <th>(default: 10)</th></tr>
+<tr><th>-p, --datapath</th>      <th>location of SQLite database</th>             <th>(default: [REPODASH_PATH]/data)</th></tr>
+</table>
 
-- -u, --user         Github username or account (default: 'matplotlib')
-- -r, --repo         Github repository name (default: 'matplotlib')
-- -t, --type         Issue type, either 'issue' (default) or 'pull_request'
-- -m, --months       plot metric analysis timespan in months (default: 12)
-- -d, --refdate      plot metric reference end date (default: now)
-- -f, --firstpage    first page number to request (default: 1)
-- -c, --pagecount    number of pages of issues to request (default: 10)
-- -p, --datapath     location of SQLite database (default: <REPO PATH>/data)
+<h3>Important Notes</h3>
 
-Example usage:
+**Dealing With Out Of Range Timespans:** If you specify a reference date for metrics and/or timespan 
+that falls outside of the date range of the issues data collected, RepoDash will do its best to adjust 
+the dates and/or shorten the analysis timespan so that it maps to the data available.
 
-**EXAMPLE 1:** Request the first 6 pages of issues from the Numpy repository and plot issues list 
-metrics for the period June 2012 to September 2012 inclusive (4 months).
+**Database Interaction:** The current version of RepoDash wipes and re-generates the database with every run. 
+An update mode of operation is planned for in the near future. This would allowing you to focus only on 
+requesting new and changed issues since the previous run, reducing the amount of API calls needed.
 
-> python3 RepoDash.py -u numpy -r numpy -m 3 -d '2012-09' -c 6
+**Authentication:** The current version of RepoDash runs without authentication. This limits you to 60 
+Github API web requests per hour. This is not enough to generate an entire history for more popular open 
+source projects. For instance, as of December 2019 matplotlib's issues list runs to approx. 160 pages. 
+Authentication increases the maximum query rate to 5000 per hour. It is a high priority item on our 
+to-do list to add the ability to supply your own authentication token on the command line.
 
+<h3>Example Usage</h3>
 
-**EXAMPLE2:** Request pages 100 to 105 (12 pages) of issues from the Kubernetes repository and plot 
-the last 6 months of metrics. The silent reference date defaults 'now'. If 'now' falls outside of the 
-date range observed in the collected date range, RepoDash will map the analysis period to the latest N
-months (where N is the timespan we have specified on the command line).
+**EXAMPLE 1: Numpy** 
 
-> python3 RepoDash.py -u kubernetes -r kubernetes -m 6 -f 100 -c 12
+Request the first 6 pages of issues from the Numpy repository and plot issues list metrics for the period June 2012 
+to September 2012 inclusive (4 months).
+
+    python3 RepoDash.py -u numpy -r numpy -m 3 -d '2012-09' -c 6
+
+![Screenshot](images/RepoDash_UserGuide_Ex1_Numpy.png)
+
+**EXAMPLE2: Pandas** 
+
+Request pages 100 to 111 (12 pages) of issues from the Kubernetes repository and plot the last 6 months of issues list 
+metrics. 
+
+    python3 RepoDash.py -u pandas -r pandas -m 6 -f 100 -c 12
+
+The silent ref_date argument defaults to 'now'. This falls outside of the date range observed in the collected date range, 
+so RepoDash maps the plotting timeframe to the latest N months of the data, where N is the timespan we have specified on
+the command line (-months 6).
+
+**Notes**
+<ol>
+<li>there are only 5 months of metrics in the dashboard below. This is because the issues data found within pages 
+100-111 of the issues list only spans 5 months (May 2015 - Sept 2015).</li>
+<li>RepoDash has no knowledge of prior existing open issues in the list and thus presumes an empty list prior to May 2015 
+for simplicity. The Total Open Issues count is therefore relative to the count at the end of April 2015.</li>
+</ol>
+
+![Screenshot](images/RepoDash_UserGuide_Ex2_Pandas.png)
 
 
