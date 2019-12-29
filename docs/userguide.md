@@ -19,16 +19,18 @@ By using command line arguments, you can run RepoDash against any public Github 
 any number of pages starting from any specific page of the issues list, and output issues list metrics
 for any time period of your choosing. The available command line options are as follows:
 
+<p>
 <table>
 <tr><th>-u, --user</th>          <th>Github username or account</th>              <th>(default: 'matplotlib')</th></tr>
-<tr><th>-r, --repo</th>          <th>Github repository name</th><th>              <th>(default: 'matplotlib')</th></tr>
+<tr><th>-r, --repo</th>          <th>Github repository name</th>                  <th>(default: 'matplotlib')</th></tr>
 <tr><th>-t, --type</th>          <th>Issue type ('issue', 'pull_request')</th>    <th>(default: 'issue')</th></tr>
 <tr><th>-m, --months</th>        <th>plot metric analysis timespan in months</th> <th>(default: 12)</th></tr>
 <tr><th>-d, --refdate</th>       <th>plot metric reference end date</th>          <th>(default: now)</th></tr>
 <tr><th>-f, --firstpage</th>     <th>first page number to request</th>            <th>(default: 1)</th></tr>
 <tr><th>-c, --pagecount</th>     <th>number of pages of issues to request</th>    <th>(default: 10)</th></tr>
-<tr><th>-p, --datapath</th>      <th>location of SQLite database</th>             <th>(default: [REPODASH_PATH]/data)</th></tr>
+<tr><th>-p, --datapath</th>      <th>location of SQLite database</th>             <th>(default: REPODASH_PATH/data)</th></tr>
 </table>
+</p>
 
 <h3>Important Notes</h3>
 
@@ -69,12 +71,14 @@ so RepoDash maps the plotting timeframe to the latest N months of the data, wher
 the command line (-months 6).
 
 **Notes**
+<p>
 <ol>
 <li>there are only 5 months of metrics in the dashboard below. This is because the issues data found within pages 
 100-111 of the issues list only spans 5 months (May 2015 - Sept 2015).</li>
 <li>RepoDash has no knowledge of prior existing open issues in the list and thus presumes an empty list prior to May 2015 
 for simplicity. The Total Open Issues count is therefore relative to the count at the end of April 2015.</li>
 </ol>
+</p>
 
 ![Screenshot](images/RepoDash_UserGuide_Ex2_Pandas.png)
 
