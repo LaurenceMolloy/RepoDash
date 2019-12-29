@@ -1,6 +1,17 @@
 # ignore files called "ignore"
 
 src/ignore/
+src/__pycache__
+src/issues.db
+
 test/ignore/
+test/__pycache__
+test/test.db
+
 data/ignore/
+data/__pycache__
+data/issues.db
+data/test.db
+
 docs/ignore/
+docs/__pycache__
