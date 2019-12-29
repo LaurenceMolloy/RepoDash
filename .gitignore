@@ -1,0 +1,6 @@
+# ignore files called "ignore"
+
+src/ignore/
+test/ignore/
+data/ignore/
+docs/ignore/

@@ -1,0 +1,36 @@
+pi@ManicMiner:~/Desktop/LAURENCE/GITHUB/RepoDash/src $ python3 RepoDash.py -u matplotlib -r matplotlib -m 3 -c 4 -f 1
+[GithubIssues.py : get_next_page : 169] INFO processing page 1 of [unknown] pages...
+[GithubIssues.py : get_next_page : 173] INFO remaining API call allowance = 43.
+[GithubIssues.py : get_next_page : 169] INFO processing page 2 of 152 pages...
+[GithubIssues.py : get_next_page : 173] INFO remaining API call allowance = 42.
+[GithubIssues.py : get_next_page : 169] INFO processing page 3 of 152 pages...
+[GithubIssues.py : get_next_page : 173] INFO remaining API call allowance = 41.
+[GithubIssues.py : get_next_page : 169] INFO processing page 4 of 152 pages...
+[GithubIssues.py : get_next_page : 173] INFO remaining API call allowance = 40.
+[GithubIssues.py : __get_monthly_span : 477] INFO start=2010-09-15 , end=2012-08-31
+INFO Processing data...
+[GithubIssues.py : __get_monthly_span : 477] INFO start=2010-09-15 , end=2012-08-31
+[GithubIssues.py : set_plot_window : 640] WARN last plot month Dec-19 is not within the data timespan
+[GithubIssues.py : set_plot_window : 641] WARN setting last plot month to Aug-12
+START 21 END 23
+[GithubIssues.py : __get_monthly_span : 477] INFO start=2010-09-15 , end=2012-08-31
+DB: DatetimeIndex(['2010-09-30', '2010-10-31', '2010-11-30', '2010-12-31',
+               '2011-01-31', '2011-02-28', '2011-03-31', '2011-04-30',
+               '2011-05-31', '2011-06-30', '2011-07-31', '2011-08-31',
+               '2011-09-30', '2011-10-31', '2011-11-30', '2011-12-31',
+               '2012-01-31', '2012-02-29', '2012-03-31', '2012-04-30',
+               '2012-05-31', '2012-06-30', '2012-07-31', '2012-08-31'],
+              dtype='datetime64[ns]', freq='M')
+START MONTH 2012-06-01 00:00:00 END MONTH 2012-09-01 00:00:00
+PLOT DatetimeIndex(['2012-06-30', '2012-07-31', '2012-08-31'], dtype='datetime64[ns]', freq='M')
+RepoDash.py:89: RuntimeWarning: invalid value encountered in true_divide
+  gd.opened_issue_counts[w_start:w_end])
+RepoDash.py:93: RuntimeWarning: invalid value encountered in true_divide
+  monthly_sum)) - 1
+qt5ct: using qt5ct plugin
+Traceback (most recent call last):
+  File "RepoDash.py", line 272, in <module>
+    if item.max() > max_age:
+  File "/usr/lib/python3/dist-packages/numpy/core/_methods.py", line 28, in _amax
+    return umr_maximum(a, axis, None, out, keepdims, initial)
+ValueError: zero-size array to reduction operation maximum which has no identity

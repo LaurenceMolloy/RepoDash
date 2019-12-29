@@ -1,0 +1,44 @@
+pi@ManicMiner:~/Desktop/LAURENCE/GITHUB/RepoDash/src $ python3 RepoDash.py -u kubernetes -r kubernetes -m 12  -c 7 -f 200
+[GithubIssues.py : get_next_page : 158] INFO processing page 200 of [unknown] pages...
+[GithubIssues.py : get_next_page : 162] INFO remaining API call allowance = 7.
+[GithubIssues.py : get_next_page : 158] INFO processing page 201 of 867 pages...
+[GithubIssues.py : get_next_page : 162] INFO remaining API call allowance = 6.
+[GithubIssues.py : get_next_page : 158] INFO processing page 202 of 867 pages...
+[GithubIssues.py : get_next_page : 162] INFO remaining API call allowance = 5.
+[GithubIssues.py : get_next_page : 158] INFO processing page 203 of 867 pages...
+[GithubIssues.py : get_next_page : 162] INFO remaining API call allowance = 4.
+[GithubIssues.py : get_next_page : 158] INFO processing page 204 of 867 pages...
+[GithubIssues.py : get_next_page : 162] INFO remaining API call allowance = 3.
+[GithubIssues.py : get_next_page : 158] INFO processing page 205 of 867 pages...
+[GithubIssues.py : get_next_page : 162] INFO remaining API call allowance = 2.
+[GithubIssues.py : get_next_page : 158] INFO processing page 206 of 867 pages...
+[GithubIssues.py : get_next_page : 162] INFO remaining API call allowance = 1.
+[GithubIssues.py : __get_monthly_span : 466] INFO start=2016-01-21 , end=2016-02-03
+INFO Processing data...
+[GithubIssues.py : __get_monthly_span : 466] INFO start=2016-01-21 , end=2016-02-03
+[GithubIssues.py : set_plot_window : 627] WARN last plot month Dec-19 is not within the data timespan
+[GithubIssues.py : set_plot_window : 628] WARN setting last plot month to Feb-16
+[GithubIssues.py : set_plot_window : 634] WARN first plot month Dec-19 is not within the data timespan
+[GithubIssues.py : set_plot_window : 635] WARN setting first plot month to Feb-16
+START 1 END 1
+[GithubIssues.py : __get_monthly_span : 466] INFO start=2016-01-21 , end=2016-02-03
+DB: DatetimeIndex(['2016-01-31', '2016-02-29'], dtype='datetime64[ns]', freq='M')
+START MONTH 2016-02-01 00:00:00 END MONTH 2016-03-01 00:00:00
+PLOT DatetimeIndex(['2016-02-29'], dtype='datetime64[ns]', freq='M')
+qt5ct: using qt5ct plugin
+Traceback (most recent call last):
+  File "RepoDash.py", line 282, in <module>
+    plt.boxplot(ages[1:], widths=0.5, positions=positions[1:], patch_artist=True)
+  File "/home/pi/.local/lib/python3.7/site-packages/matplotlib/pyplot.py", line 2473, in boxplot
+    is not None else {}))
+  File "/home/pi/.local/lib/python3.7/site-packages/matplotlib/cbook/deprecation.py", line 307, in wrapper
+    return func(*args, **kwargs)
+  File "/home/pi/.local/lib/python3.7/site-packages/matplotlib/__init__.py", line 1599, in inner
+    return func(ax, *map(sanitize_sequence, args), **kwargs)
+  File "/home/pi/.local/lib/python3.7/site-packages/matplotlib/axes/_axes.py", line 3669, in boxplot
+    labels=labels, autorange=autorange)
+  File "/home/pi/.local/lib/python3.7/site-packages/matplotlib/cbook/__init__.py", line 1245, in boxplot_stats
+    X = _reshape_2D(X, "X")
+  File "/home/pi/.local/lib/python3.7/site-packages/matplotlib/cbook/__init__.py", line 1436, in _reshape_2D
+    raise ValueError("{} must have 2 or fewer dimensions".format(name))
+ValueError: X must have 2 or fewer dimensions
