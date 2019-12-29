@@ -71,7 +71,7 @@ class GithubIssuesUtils:
                             help="reference date (default=now)")
         arg_parser.add_argument('-f', '--firstpage', type=int, default=1,
                             help="first page of issues to request (default=1)")
-        arg_parser.add_argument('-c', '--pagecount', type=int, default=1,
+        arg_parser.add_argument('-c', '--pagecount', type=int, default=10,
                             help="number of pages to request (default=10)")
         arg_parser.add_argument('-p', '--datapath', type=str, default=os.getcwd(),
                             help="path for SQLite db file (default=pwd)")

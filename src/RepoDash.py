@@ -22,8 +22,6 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
 gu = GithubIssuesUtils()
 args = gu.process_args()
-
-gu.args = {'account' : 'numpy', 'repo' : 'numpy'}
 args = gu.args
 
 db = GithubIssuesDB(f'{gu.data_path}/issues', 'issues', echo=False)
