@@ -93,7 +93,7 @@ to September 2012 inclusive (4 months).
 
 **EXAMPLE2: Pandas** 
 
-Request pages 100 to 111 (12 pages) of issues from the Kubernetes repository and plot the last 6 months of issues list 
+Request pages 100 to 111 (12 pages) of issues from the Pandas repository and plot the last 6 months of issues list 
 metrics. 
 
     python3 RepoDash.py -u pandas -r pandas -m 6 -f 100 -c 12
