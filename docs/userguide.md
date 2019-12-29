@@ -71,7 +71,7 @@ that falls outside of the date range of the issues data collected, RepoDash will
 the dates and/or shorten the analysis timespan so that it maps to the data available.
 
 **Database Interaction:** The current version of RepoDash wipes and re-generates the database with every run. 
-An update mode of operation is planned for in the near future. This would allowing you to focus only on 
+An update mode of operation is planned for in the near future. This would allow you to focus only on 
 requesting new and changed issues since the previous run, reducing the amount of API calls needed.
 
 **Authentication:** The current version of RepoDash runs without authentication. This limits you to 60 
@@ -87,7 +87,7 @@ to-do list to add the ability to supply your own authentication token on the com
 Request the first 6 pages of issues from the Numpy repository and plot issues list metrics for the period June 2012 
 to September 2012 inclusive (4 months).
 
-    python3 RepoDash.py -u numpy -r numpy -m 3 -d '2012-09' -c 6
+    python3 RepoDash.py -u numpy -r numpy -m 4 -d '2012-09' -c 6
 
 ![Screenshot](images/RepoDash_UserGuide_Ex1_Numpy.png)
 
@@ -100,7 +100,7 @@ metrics.
 
 The silent ref_date argument defaults to 'now'. This falls outside of the date range observed in the collected date range, 
 so RepoDash maps the plotting timeframe to the latest N months of the data, where N is the timespan we have specified on
-the command line (-months 6).
+the command line (-m 6).
 
 **Notes**
 <p>
