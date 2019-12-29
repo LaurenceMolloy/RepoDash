@@ -2,12 +2,9 @@
 
 <h3>Pre-requisites</h3>
 
-Repodash was written with and tested against python 3 (version 3.7.3). It hasn't been tested against 
-earlier versions Python. If you're using an earlier version of python and it works for you, please
-let us know so we can add it to the list of known supported versions of python.
-
-Repodash makes use of the following python modules, some of which are included in the core python 3.7.3 installation, 
-others will require installation:
+Repodash was written with and tested against python 3 (version 3.7.3). It hasn't currently been tested 
+against earlier versions Python. The codebase makes use of the following python modules, some of which 
+are included in the core python 3.7.3 installation, and someof which may require installation:
 
 - os
 - sys
@@ -22,9 +19,18 @@ others will require installation:
 - matplotlib
 - pytest, pytest-flake8, pytest-mypy (for unit testing)
 
-If you're missing any of these modules you can install them on the command line using the following command:
+If you encounter an error message of the following form when you run RepoDash.py you are missing a python module 
+that needs installing manually
+
+    ModuleNotFoundError: No module named 'requests'
+
+To install the missing module, you can install it by typing the following on the command line and following the 
+on-screen instructions:
 
     python3 -mpip install MODULE_NAME
+
+Future plans may include writing an install script that ensures you have a supported version of python and all 
+required modules are present in your python installation.
 
 <h3>Installing and Running RepoDash in Demo Mode</h3>
 
