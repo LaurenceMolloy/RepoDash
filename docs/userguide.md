@@ -115,9 +115,9 @@ metrics.
 **Notes**
 <p>
 <ol>
-<li>The silent ref_date argument defaults to 'now'. This falls outside of the date range observed in the collected date range, 
-so RepoDash maps the plotting timeframe to the latest N months of the data, where N is the timespan we have specified on
-the command line (-m 6).</li>
+<li>The silent _**-d**_ (reference date) argument defaults to _now_. This falls outside of the date range observed in the 
+collected date range, so RepoDash maps the plotting timeframe to the latest N months of the data, where N is the timespan 
+we have specified on the command line with _**-m 6**_.</li>
 <li>Only 5 months of metrics are displayed in this dashboard. This is because the data found within pages 100-111 of the 
 issues list only spans 5 usable months (May 2015 - Sept 2015). There is data for April 2015 but it's only used to calculate
 the total issues count at the start of May 2015 and is ignored for all other purposes.</li>
