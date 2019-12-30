@@ -85,7 +85,7 @@ to-do list to add the ability to supply your own authentication token on the com
 
 **EXAMPLE 1: Numpy Issues** 
 
-Request the first 6 pages of the issues list from the Numpy repository and plot __**issue**__ metrics for the period June 2012 
+Request the first 6 pages of the issues list from the Numpy repository and plot _**issue**_ metrics for the period June 2012 
 to September 2012 inclusive (4 months).
 
     python3 RepoDash.py -u numpy -r numpy -m 4 -d '2012-09' -c 6
