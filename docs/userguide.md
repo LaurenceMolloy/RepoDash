@@ -2,9 +2,10 @@
 
 <h3>Pre-requisites</h3>
 
-Repodash was written with and tested against python 3 (version 3.7.3). It hasn't currently been tested 
-against earlier versions Python. The codebase makes use of the following python modules, some of which 
-are included in the core python 3.7.3 installation, and someof which may require installation:
+Repodash was written with and tested against python 3 (version 3.7.3) on a linux PC (Raspbian 10). It hasn't 
+currently been tested on Windows or against earlier versions Python. The codebase makes use of the following 
+python modules, some of which are included in the core python 3.7.3 installation, and some of which may 
+require installation:
 
 - os
 - sys
@@ -24,7 +25,7 @@ that needs installing manually
 
     ModuleNotFoundError: No module named 'requests'
 
-To install the missing module, you can install it by typing the following on the command line and following the 
+To install a missing python3 module open a terminal window, type the following on the command line, and follow any 
 on-screen instructions:
 
     python3 -mpip install MODULE_NAME
@@ -94,7 +95,7 @@ to September 2012 inclusive (4 months).
 
 **EXAMPLE 2: Numpy PRs** 
 
-Request the first 6 pages of the issues list from the Numpy repository and plot __**pull-request**__ metrics for the period June 2012 
+Request the first 6 pages of the issues list from the Numpy repository and plot _**pull-request**_ metrics for the period June 2012 
 to September 2012 inclusive (4 months).
 
     python3 RepoDash.py -u numpy -r numpy -m 4 -d '2012-09' -c 6 -t pr
@@ -109,14 +110,15 @@ metrics.
 
     python3 RepoDash.py -u pandas -r pandas -m 6 -f 100 -c 12
 
-The silent ref_date argument defaults to 'now'. This falls outside of the date range observed in the collected date range, 
-so RepoDash maps the plotting timeframe to the latest N months of the data, where N is the timespan we have specified on
-the command line (-m 6).
+![Screenshot](images/RepoDash_UserGuide_Ex3_Pandas_issue.png)
 
 **Notes**
 <p>
 <ol>
-<li>There are only 5 months of metrics in the dashboard below. This is because the data found within pages 100-111 of the 
+<li>The silent ref_date argument defaults to 'now'. This falls outside of the date range observed in the collected date range, 
+so RepoDash maps the plotting timeframe to the latest N months of the data, where N is the timespan we have specified on
+the command line (-m 6).</li>
+<li>Only 5 months of metrics are displayed in this dashboard. This is because the data found within pages 100-111 of the 
 issues list only spans 5 usable months (May 2015 - Sept 2015). There is data for April 2015 but it's only used to calculate
 the total issues count at the start of May 2015 and is ignored for all other purposes.</li>
 <li>RepoDash has no knowledge of prior existing open issues in the list and thus presumes an empty list prior to April 2015 
@@ -124,6 +126,5 @@ for simplicity. The Total Open Issues count is therefore relative to a zero coun
 </ol>
 </p>
 
-![Screenshot](images/RepoDash_UserGuide_Ex3_Pandas_issue.png)
 
 
