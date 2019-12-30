@@ -2,10 +2,12 @@
 
 <h3>Pre-requisites</h3>
 
-Repodash was written with and tested against python 3 (version 3.7.3) on a linux PC (Raspbian 10). It hasn't 
-currently been tested on Windows or against earlier versions of python. The codebase makes use of the following 
-python modules, some of which are included in the core python 3.7.3 installation, and some of which may 
-require installation:
+RepoDash was written with and tested against python 3 (version 3.7.3) on a linux PC (Raspbian 10). It hasn't 
+currently been tested on Windows or against earlier versions of python. However, the codebase makes use of 
+f-strings, a feature that was introduced in python version 3.6. 
+
+The codebase makes use of the following python modules, some of which are included in the core python 3.7.3 
+installation, and some of which may require installation:
 
 - os
 - sys
