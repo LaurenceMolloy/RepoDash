@@ -82,19 +82,30 @@ to-do list to add the ability to supply your own authentication token on the com
 
 <h3>Example Usage</h3>
 
-**EXAMPLE 1: Numpy** 
+**EXAMPLE 1: Numpy Issues** 
 
-Request the first 6 pages of issues from the Numpy repository and plot issues list metrics for the period June 2012 
+Request the first 6 pages of the issues list from the Numpy repository and plot __**issue**__ metrics for the period June 2012 
 to September 2012 inclusive (4 months).
 
     python3 RepoDash.py -u numpy -r numpy -m 4 -d '2012-09' -c 6
 
-![Screenshot](images/RepoDash_UserGuide_Ex1_Numpy.png)
+![Screenshot](images/RepoDash_UserGuide_Ex1_Numpy_issue.png)
 
-**EXAMPLE2: Pandas** 
 
-Request pages 100 to 111 (12 pages) of issues from the Pandas repository and plot the last 6 months of issues list 
-metrics. 
+**EXAMPLE 2: Numpy PRs** 
+
+Request the first 6 pages of the issues list from the Numpy repository and plot __**pull-request**__ metrics for the period June 2012 
+to September 2012 inclusive (4 months).
+
+    python3 RepoDash.py -u numpy -r numpy -m 4 -d '2012-09' -c 6 -t pr
+
+![Screenshot](images/RepoDash_UserGuide_Ex2_Numpy_pr.png)
+
+
+**EXAMPLE3: Pandas Issues** 
+
+Request pages 100 to 111 (12 pages) of the issues list from the Pandas repository and plot the last 6 months of issue 
+metrics.
 
     python3 RepoDash.py -u pandas -r pandas -m 6 -f 100 -c 12
 
@@ -113,6 +124,6 @@ for simplicity. The Total Open Issues count is therefore relative to a zero coun
 </ol>
 </p>
 
-![Screenshot](images/RepoDash_UserGuide_Ex2_Pandas.png)
+![Screenshot](images/RepoDash_UserGuide_Ex3_Pandas_issue.png)
 
 
