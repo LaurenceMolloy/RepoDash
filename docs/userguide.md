@@ -3,7 +3,7 @@
 <h3>Pre-requisites</h3>
 
 Repodash was written with and tested against python 3 (version 3.7.3) on a linux PC (Raspbian 10). It hasn't 
-currently been tested on Windows or against earlier versions Python. The codebase makes use of the following 
+currently been tested on Windows or against earlier versions of python. The codebase makes use of the following 
 python modules, some of which are included in the core python 3.7.3 installation, and some of which may 
 require installation:
 
@@ -113,9 +113,9 @@ metrics.
 ![Screenshot](images/RepoDash_UserGuide_Ex3_Pandas_issue.png)
 
 **Notes**
-- The silent _**-d**_ (reference date) argument defaults to _now_. This falls outside of the date range observed in the 
+- The silent **-d** (reference date) argument defaults to _now_. This falls outside of the date range observed in the 
 collected date range, so RepoDash maps the plotting timeframe to the latest N months of the data, where N is the timespan 
-we have specified on the command line with _**-m 6**_.</li>
+we have specified on the command line with **-m 6**.</li>
 - Only 5 months of metrics are displayed in this dashboard. This is because the data found within pages 100-111 of the 
 issues list only spans 5 usable months (May 2015 - Sept 2015). There is data for April 2015 but it's only used to calculate
 the total issues count at the start of May 2015 and is ignored for all other purposes.</li>
