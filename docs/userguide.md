@@ -115,12 +115,12 @@ metrics.
 **Notes**
 - The silent **-d** (reference date) argument defaults to _now_. This falls outside of the date range observed in the 
 collected date range, so RepoDash maps the plotting timeframe to the latest N months of the data, where N is the timespan 
-we have specified on the command line with **-m 6**.</li>
+we have specified on the command line with **-m 6**.
 - Only 5 months of metrics are displayed in this dashboard. This is because the data found within pages 100-111 of the 
 issues list only spans 5 usable months (May 2015 - Sept 2015). There is data for April 2015 but it's only used to calculate
-the total issues count at the start of May 2015 and is ignored for all other purposes.</li>
+the total issues count at the start of May 2015 and is ignored for all other purposes.
 - RepoDash has no knowledge of prior existing open issues in the list and thus presumes an empty list prior to April 2015 
-for simplicity. The Total Open Issues count is therefore relative to a zero count at the start of April 2015.</li>
+for simplicity. The Total Open Issues count is therefore relative to a zero count at the start of April 2015.
 
 
 
