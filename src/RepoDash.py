@@ -39,13 +39,15 @@ for page in range(0, args['page_count']):
         db.insert_issue(issue)
 
 # if no issue activity is found, go no further
-if db.count_records("issue") == 0:
-    print ("ERROR: no issues found")
+if db.count_records(f"{args['issue_type']}") == 0:
+    print (f"ERROR: no {args['issue_type']}s found")
     exit()
 
 gd = GithubIssuesData()
 data_span = db.monthly_span
 gd.init_arrays(data_span)
+
+
 
 # populate numpy data arrays for plotting ([1] opened, [2] closed, [3] total open & [4] ages)
 print("INFO Processing data...")
@@ -53,7 +55,7 @@ i = 0
 for idx in data_span:
     # [1] & [2]
     [gd.opened_issue_counts[i],
-     gd.closed_issue_counts[i]] = db.count_issues('issue',
+     gd.closed_issue_counts[i]] = db.count_issues(args['issue_type'],
                                                   idx.year,
                                                   idx.month)
     # [3]
@@ -62,7 +64,7 @@ for idx in data_span:
     else:
         gd.total_open_issue_counts[i] = gd.total_open_issue_counts[(i-1)] + gd.opened_issue_counts[i] - gd.closed_issue_counts[i]
     # [4]
-    npa = db.get_issue_ages('issue', idx.strftime('%Y-%m-%d'))
+    npa = db.get_issue_ages(args['issue_type'], idx.strftime('%Y-%m-%d'))
     gd.issue_ages_append(npa.values)
     i += 1
 
@@ -71,7 +73,7 @@ for idx in data_span:
 w_start -= 1
 w_end += 1
 
-#db.show_issues("issue")
+#db.show_issues(f"{args['issue_type']}")
 db.show_statistics(gd.plot_window)
 
 # calculate monthly mix of opened/closed issues
@@ -107,7 +109,7 @@ bar_spacing = 0.1
 #plt.style.use('seaborn-whitegrid')
 fig, ax = plt.subplots(3, 1, figsize=(15, 10), constrained_layout=False)
 plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=0.15)
-title = f"Analysis of {db.get_repo_name()} Github issues for period {gd.month_labels[w_start+1]} to {gd.month_labels[w_end-1]}"
+title = f"Analysis of {db.get_repo_name()} Github {args['issue_type']}s for period {gd.month_labels[w_start+1]} to {gd.month_labels[w_end-1]}"
 fig.suptitle(title, fontsize=16)
 
 #######################################################################
@@ -151,7 +153,7 @@ plt.axis([0, opened.size, 0, max_height*1.1])
 
 plt.gca().invert_yaxis()
 
-plt.ylabel("Newly Opened/Closed Issues", labelpad=10)
+plt.ylabel(f"Newly Opened/Closed {args['issue_type']}s", labelpad=10)
 
 plt.tick_params(
     axis='x',          # changes apply to the x-axis
@@ -160,8 +162,8 @@ plt.tick_params(
     top=False,         # ticks along the top edge are off
     labelbottom=False) # labels along the bottom edge are off
 
-red_patch   = mpatches.Patch(color='#BB0000', label='opened issues')
-green_patch = mpatches.Patch(color='#00BB00', label='closed issues')
+red_patch   = mpatches.Patch(color='#BB0000', label=f"opened {args['issue_type']}s")
+green_patch = mpatches.Patch(color='#00BB00', label=f"closed {args['issue_type']}s")
 plt.legend(handles=[red_patch, green_patch], bbox_to_anchor=(0, 1.02, 1, .102), loc='lower right',
            ncol=2, borderaxespad=0)
 
@@ -219,7 +221,7 @@ for i in range(1,total_open.size):
                     bbox=bbox_props)
 
 plt.axis([0, total_open.size, max(0,total_open.min()-y_padding), total_open.max()+y_padding])
-plt.ylabel("Total Open Issues", labelpad=10)
+plt.ylabel(f"Total Open {args['issue_type']}s", labelpad=10)
 
 plt.tick_params(
     axis='x',          # changes apply to the x-axis
@@ -242,7 +244,7 @@ cbar_ax = inset_axes(ax[1],
 data = np.random.randn(1, 1) # dummy 2D array (allows me to create the pcolormesh below)
 psm = ax[1].pcolormesh(data, cmap=combined_cmap, rasterized=True, vmin=-100, vmax=100)
 cbar = fig.colorbar(psm, ax=ax[1], cax=cbar_ax)
-label = 'mix of issue activity\n+100 = 100% opened issues\n-100 = 100% closed issues'
+label = f"mix of {args['issue_type']} activity\n+100 = 100% opened {args['issue_type']}s\n-100 = 100% closed {args['issue_type']}s"
 cbar.set_label(label)
 
 #################################################################################
@@ -273,7 +275,7 @@ plt.boxplot(ages[1:], widths=0.5, positions=positions[1:], patch_artist=True)
 plt.axis([0,len(ages),0,max_age])
 plt.xticks(np.arange(labels.size), labels, rotation=60) 
 plt.xlabel("Calendar Month")
-plt.ylabel("Issue Age (days)", labelpad=10)
+plt.ylabel(f"{args['issue_type']} Age (days)", labelpad=10)
 
 # Show the grid lines as dark grey lines
 plt.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=0.25)

@@ -355,7 +355,7 @@ class GithubIssuesDB:
         
         # all pull requests contain a 'pull_request' JSON object with a 'url' key...
         if 'pull_request.url' in df.columns:
-            df['type'] = "pull_request"
+            df['type'] = "pr"
         # ...otherwise, they are assumed to be 'issues'
         else:
             df['type'] = "issue"
