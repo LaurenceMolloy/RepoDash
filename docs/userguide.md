@@ -1,4 +1,4 @@
-<h1>Using RepoDash</h1>
+<h1>RepoDash User Guide</h1>
 
 <h3>Pre-requisites</h3>
 
