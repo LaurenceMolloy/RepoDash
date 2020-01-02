@@ -15,9 +15,12 @@ metrics:</p>
 <p>
 <ul>
 <li>The number of new issues created</li>
+<li>How many of these issues are still open at the time of generating the dashboard</li>
+<li>How many of these issues still require triage (labelling) at the time of generating the dashboard</li>
 <li>The number of existing issues resolved</li>
 <li>The percentage split between opened / closed issues</li>
-<li>The total number of open issues in the issues list (month start & month end)</li>
+<li>The aggregate number of open issues in the issues list (month start & month end)</li>
+<li>The aggregate number of open issues in the issues list requiring triage (month start & month end)</li>
 <li>The change in total number of open issues over the month</li>
 <li>The average age and age spread of open issues in the isssues list</li>
 </ul>
