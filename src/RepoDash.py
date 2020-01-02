@@ -34,9 +34,12 @@ db.create_table()
 ga = GithubIssuesAPI()
 ga.set_seed_url(args)
 for page in range(0, args['page_count']):
-    ga.get_next_page()
+    ga.get_next_page(args)
     for issue in ga.response.json():
         db.insert_issue(issue)
+    # stop when we've reached last page of issues
+    if ga.status == 202:
+        break
 
 # if no issue activity is found, go no further
 if db.count_records(f"{args['issue_type']}") == 0:
@@ -49,7 +52,8 @@ gd.init_arrays(data_span)
 
 
 
-# populate numpy data arrays for plotting ([1] opened, [2] closed, [3] total open & [4] ages)
+# populate numpy data arrays for plotting
+# ([1] opened, [2] closed, [3] open & unlabelled [4] open [5] total open & [6] ages)
 print("INFO Processing data...")
 i = 0
 for idx in data_span:
@@ -59,13 +63,27 @@ for idx in data_span:
                                                   idx.year,
                                                   idx.month)
     # [3]
-    if i == 0:
-        gd.total_open_issue_counts[i] = gd.opened_issue_counts[i] - gd.closed_issue_counts[i]
-    else:
-        gd.total_open_issue_counts[i] = gd.total_open_issue_counts[(i-1)] + gd.opened_issue_counts[i] - gd.closed_issue_counts[i]
+    gd.unlabelled_issue_counts[i] = db.count_monthly_unlabelled(args['issue_type'],
+                                                                idx.year,
+                                                                idx.month)
     # [4]
+    gd.open_issue_counts[i] = db.count_monthly_open(args['issue_type'],
+                                                    idx.year,
+                                                    idx.month)
+    # [5]
+    if i == 0:
+        gd.total_open_issue_counts[0] = (gd.open_issue_counts[0]
+                                         if args['offset_month'] == 'opened'
+                                         else gd.opened_issue_counts[0] - gd.closed_issue_counts[0])
+        gd.total_unlabelled_issue_counts[0] = gd.unlabelled_issue_counts[0]
+    else:
+        gd.total_open_issue_counts[i] = (gd.total_open_issue_counts[(i-1)] + gd.open_issue_counts[i]
+                                         if args['offset_month'] == 'opened'
+                                         else gd.total_open_issue_counts[(i-1)] + gd.opened_issue_counts[i] - gd.closed_issue_counts[i])
+        gd.total_unlabelled_issue_counts[i] = gd.total_unlabelled_issue_counts[i-1] + gd.unlabelled_issue_counts[i]       
+    # [6]
     npa = db.get_issue_ages(args['issue_type'], idx.strftime('%Y-%m-%d'))
-    gd.issue_ages_append(npa.values)
+    gd.issue_ages.append(npa.values.flatten())
     i += 1
 
 # identify start and end array indices for requested plotting time span
@@ -74,7 +92,7 @@ w_start -= 1
 w_end += 1
 
 #db.show_issues(f"{args['issue_type']}")
-db.show_statistics(gd.plot_window)
+#db.show_statistics(gd.plot_window)
 
 # calculate monthly mix of opened/closed issues
 # range = [-1, 1], -ve => closed > opened, +ve => opened > closed
@@ -119,6 +137,8 @@ plt.subplot(3,1,1)
 
 opened = gd.opened_issue_counts[w_start:w_end]
 closed = gd.closed_issue_counts[w_start:w_end]
+unlabelled = gd.unlabelled_issue_counts[w_start:w_end]
+open_issue = gd.open_issue_counts[w_start:w_end]
 
 max_height = np.concatenate([opened[1:], closed[1:]]).max()
 
@@ -132,8 +152,17 @@ for i in range(1,opened.size):
 
     # time block shading
     plt.bar(start, max_height*1.1, width=1-(2*bar_spacing), align='edge', color='#EEEEEE',alpha=1.0)
-    plt.bar(start, opened[i],      width=0.5-bar_spacing,   align='edge', color='#BB0000',alpha=0.5)
-    plt.bar(i,     closed[i],      width=0.5-bar_spacing,   align='edge', color='#00BB00',alpha=0.5)
+
+    plt.bar(start, opened[i], width=0.5-bar_spacing,   align='edge', color='#BB0000',alpha=0.5)    
+    plt.bar(i, closed[i], width=0.5-bar_spacing,   align='edge', color='#00BB00',alpha=0.5)
+
+    plt.bar(start, open_issue[i], width=0.5-bar_spacing,   align='edge', color='w',alpha=1)
+    plt.bar(start, open_issue[i], width=0.5-bar_spacing,   align='edge', color='r',alpha=0.4)
+    plt.plot([start,start+0.5-bar_spacing], [open_issue[i],open_issue[i]], color="w", alpha=1, linewidth=0.75)
+
+    plt.bar(start, unlabelled[i], width=0.5-bar_spacing,   align='edge', color='w',alpha=1)
+    plt.bar(start, unlabelled[i], width=0.5-bar_spacing,   align='edge', color='r',alpha=0.2)
+    plt.plot([start,start+0.5-bar_spacing], [unlabelled[i],unlabelled[i]], color="w", alpha=1, linewidth=0.75)
 
     bbox_props = dict(boxstyle="round,pad=0.2", fc=(1,1,0.9), ec=(0.75,0,0), lw=1.5)
     ax_top.text(i-label_offset, opened[i]+(max_height*0.05),
@@ -162,10 +191,13 @@ plt.tick_params(
     top=False,         # ticks along the top edge are off
     labelbottom=False) # labels along the bottom edge are off
 
-red_patch   = mpatches.Patch(color='#BB0000', label=f"opened {args['issue_type']}s")
-green_patch = mpatches.Patch(color='#00BB00', label=f"closed {args['issue_type']}s")
-plt.legend(handles=[red_patch, green_patch], bbox_to_anchor=(0, 1.02, 1, .102), loc='lower right',
-           ncol=2, borderaxespad=0)
+light_red_patch   = mpatches.Patch(color='r', alpha=0.2, label=f"{args['issue_type']} requires triage")
+mid_red_patch   = mpatches.Patch(color='r', alpha=0.4, label=f"{args['issue_type']} still open")
+red_patch   = mpatches.Patch(color='#BB0000', alpha=0.5, label=f"opened {args['issue_type']}s")
+green_patch = mpatches.Patch(color='#00BB00', alpha=0.5, label=f"closed {args['issue_type']}s")
+plt.legend(handles=[light_red_patch, mid_red_patch, red_patch, green_patch],
+           bbox_to_anchor=(0, 1.02, 1, .102), loc='lower right',
+           ncol=4, borderaxespad=0)
 
 # Show the grid lines as dark grey lines
 plt.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=0.25)
@@ -176,6 +208,8 @@ plt.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=
 plt.subplot(3,1,2)
 
 total_open = gd.total_open_issue_counts[w_start:w_end]
+total_unlabelled = gd.total_unlabelled_issue_counts[w_start:w_end]
+
 y_range = total_open.max() - total_open.min()
 y_padding = y_range * 0.1 
 
@@ -209,11 +243,24 @@ for i in range(1,total_open.size):
     plt.fill_between([start,finish],
                      total_open[i-1:i+1],
                      color=col, alpha=0.75)
-    # top lines
+    # fill areas (unlabelled)
+    plt.fill_between([start,finish],
+                     total_unlabelled[i-1:i+1],
+                     color='w', alpha=1)
+    plt.fill_between([start,finish],
+                     total_unlabelled[i-1:i+1],
+                     color='r', alpha=0.2)
+    
+    # open top lines
     plt.plot(        [start,finish],
                      total_open[i-1:i+1],
                      color="w", alpha=1, linewidth=3)
 
+    # unlabelled top lines
+    plt.plot(        [start,finish],
+                     total_unlabelled[i-1:i+1],
+                     color="w", alpha=1, linewidth=0.75)
+    
     t = ax_mid.text(i+0.5, total_open[i]+(y_padding/2),
                     str(total_open[i]),
                     ha="center", va="bottom", rotation=0,
@@ -233,6 +280,11 @@ plt.tick_params(
 # Show the grid lines as dark grey lines
 plt.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=0.25)
 
+light_red_patch   = mpatches.Patch(color='r', alpha=0.2, label=f"aggregate # of {args['issue_type']}s requiring triage")
+plt.legend(handles=[light_red_patch],
+           bbox_to_anchor=(0, 1.02, 1, .102), loc='lower right',
+           ncol=1, borderaxespad=0)
+
 ### create a color map bar to display on teh right side of the plot
 cbar_ax = inset_axes(ax[1],
                      width="2%",     # width  = 2% of parent_bbox width
@@ -241,6 +293,7 @@ cbar_ax = inset_axes(ax[1],
                      bbox_to_anchor=(1.01, 0., 1, 1),
                      bbox_transform=ax[1].transAxes,
                      borderpad=0)
+
 data = np.random.randn(1, 1) # dummy 2D array (allows me to create the pcolormesh below)
 psm = ax[1].pcolormesh(data, cmap=combined_cmap, rasterized=True, vmin=-100, vmax=100)
 cbar = fig.colorbar(psm, ax=ax[1], cax=cbar_ax)
@@ -256,6 +309,8 @@ ages = gd.issue_ages[w_start:w_end]
 positions = np.arange(0,len(ages))
 labels = gd.month_labels[w_start:w_end]
 
+medianprops = dict(linewidth=2, color='w')
+
 max_age = 0
 for item in ages:
     if len(item) > 0 and item.max() > max_age:
@@ -268,10 +323,12 @@ for i in range(1,len(ages)):
 
     # time block shading
     plt.fill_between([start,finish], [max_age,max_age], color='#EEAAAA', alpha=0.5)
-    plt.fill_between([start,finish], [180,180], color='#EEEEAA', alpha=0.5)
-    plt.fill_between([start,finish], [90,90],   color='#AAEEAA', alpha=0.5)
+    plt.fill_between([start,finish], [360,360], color='#EEEEAA', alpha=0.5)
+    plt.fill_between([start,finish], [180,180],   color='#AAEEAA', alpha=0.5)
 
-plt.boxplot(ages[1:], widths=0.5, positions=positions[1:], patch_artist=True)
+plt.boxplot(ages[1:], positions=positions[1:],
+            widths=0.4, whis=[5, 95], notch=True, showfliers=False,
+            patch_artist=True, medianprops=medianprops)
 plt.axis([0,len(ages),0,max_age])
 plt.xticks(np.arange(labels.size), labels, rotation=60) 
 plt.xlabel("Calendar Month")

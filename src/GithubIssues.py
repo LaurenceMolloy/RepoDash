@@ -40,13 +40,16 @@ class GithubIssuesUtils:
 
 
     def __get_args(self) -> dict:
-        return {'account' : self.__account,
+        return {'auth_token' : self.__auth_token,
+                'account' : self.__account,
                 'repo' : self.__repo,
                 'issue_type' : self.__issue_type,
                 'timespan' : self.__timespan,
                 'ref_date' : self.__ref_date,
                 'first_page' : self.__first_page,
-                'page_count' : self.__page_count}
+                'page_count' : self.__page_count,
+                'offset_month' : self.__offset_month
+                }
 
     def __set_args(self, args : dict):
         for arg in args:
@@ -59,6 +62,8 @@ class GithubIssuesUtils:
 
     def process_args(self) -> dict:
         arg_parser = argparse.ArgumentParser()
+        arg_parser.add_argument('-a', '--authtoken', type=str, default='',
+                            help="Github personal access token (default='')")
         arg_parser.add_argument('-u', '--user', type=str, default='matplotlib',
                             help="Github user name (default='matplotlib')")
         arg_parser.add_argument('-r', '--repo', type=str, default='matplotlib',
@@ -73,9 +78,12 @@ class GithubIssuesUtils:
                             help="first page of issues to request (default=1)")
         arg_parser.add_argument('-c', '--pagecount', type=int, default=10,
                             help="number of pages to request (default=10)")
+        arg_parser.add_argument('-o', '--offsetmonth', type=str, choices=['opened','closed'], default="closed",
+                            help="which month to offset issue closure in (default=closed")
         arg_parser.add_argument('-p', '--datapath', type=str, default=os.getcwd(),
                             help="path for SQLite db file (default=pwd)")
         args = arg_parser.parse_args()
+        self.__auth_token = vars(args)['authtoken']
         self.__account = vars(args)['user']
         self.__repo = vars(args)['repo']
         self.__issue_type = vars(args)['type']
@@ -83,6 +91,7 @@ class GithubIssuesUtils:
         self.__ref_date = vars(args)['refdate']
         self.__first_page = vars(args)['firstpage']
         self.__page_count = vars(args)['pagecount']
+        self.__offset_month = vars(args)['offsetmonth']
         self.__data_path = vars(args)['datapath']
         return self.args
 
@@ -152,26 +161,33 @@ class GithubIssuesAPI:
         self.__next_page = page
 
     
-    def get_next_page(self):
+    def get_next_page(self, args : dict):
         if self.__next_page_url is None:
             print(f"{self.__utils.stacktrace()} ERROR The 'next_page_url' property has not been set. Please set it to a valid URL.") 
             exit()
         
         print(f"{self.__utils.stacktrace()} INFO processing page {self.__next_page} of {self.__last_page} pages...")
         
-        self.__response = requests.get(url = self.__next_page_url)
+        headers = ({"Authorization": f"token {args['auth_token']}"} if args['auth_token'] != '' else {})
+        self.__response = requests.get(url = self.__next_page_url, headers = headers)
         
         print(f"{self.__utils.stacktrace()} INFO remaining API call allowance = {self.__get_remaining_calls()}.")
 
         # check for valid response
         if not self.__response.headers['Status'].startswith("200 "):
+            self.__status = 201
             self.__process_response_error()
             exit()
 
         if 'Link' in self.__response.headers:
-            [self.__next_page_url] = re.findall("<([^<]*)>;\s+rel=.next",         self.__response.headers['Link'])
-            [self.__next_page]     = re.findall("<[^<]*page=(\d+)>;\s+rel=.next", self.__response.headers['Link'])
-            [self.__last_page]     = re.findall("<[^<]*page=(\d+)>;\s+rel=.last", self.__response.headers['Link'])
+            if self.__next_page != self.__last_page:
+                [self.__next_page_url] = re.findall("<([^<]*)>;\s+rel=.next",         self.__response.headers['Link'])
+                [self.__next_page]     = re.findall("<[^<]*page=(\d+)>;\s+rel=.next", self.__response.headers['Link'])
+                [self.__last_page]     = re.findall("<[^<]*page=(\d+)>;\s+rel=.last", self.__response.headers['Link'])
+            else:
+                self.__status = 202
+                print(f"{self.__utils.stacktrace()} WARN reached last page of the issues list.")
+                
 
 
     def __process_response_error(self):
@@ -299,6 +315,7 @@ class GithubIssuesDB:
                                             repo_id      INTEGER,
                                             repo_name    TEXT,
                                             type         TEXT,
+                                            label_count  INTEGER,
                                             labelstring  TEXT,
                                             state        TEXT,
                                             opened_date  TEXT,
@@ -345,6 +362,7 @@ class GithubIssuesDB:
         labelstring = []
         for label in df['labels'][0]:
             labelstring.append(str(label['name']))
+        df['label_count'] = len(labelstring)
         df['labelstring'] = ':'.join(labelstring)
 
         # the repository name can be found at the end of the 'repository_url' data item
@@ -364,6 +382,9 @@ class GithubIssuesDB:
         df.rename(columns={'number'     : 'id',
                            'created_at' : 'opened_date',
                            'closed_at'  : 'closed_date'}, inplace=True)
+        
+#        print (pd.DatetimeIndex(df['closed_date']))
+#        print (pd.DatetimeIndex(df['closed_date']).month)
     
         # add month & year number fields, derived from relevant JSON datetime fields
         df['opened_month'] = pd.DatetimeIndex(df['opened_date']).month
@@ -371,8 +392,16 @@ class GithubIssuesDB:
         df['closed_month'] = pd.DatetimeIndex(df['closed_date']).month
         df['closed_year']  = pd.DatetimeIndex(df['closed_date']).year
 
+#        df['closed_month'] = (0
+#                              if pd.isnull(pd.DatetimeIndex(df['closed_date']))
+#                              else pd.DatetimeIndex(df['closed_date']).month)
+#        df['closed_year']  = (0
+#                              if pd.isnull(pd.DatetimeIndex(df['closed_date']))
+#                              else pd.DatetimeIndex(df['closed_date']).year)
+
         # Define a subset of the full dataframe for direct SQL insertion 
-        record = df[['id', 'state', 'repo_id', 'repo_name', 'type', 'labelstring',
+        record = df[['id', 'state', 'repo_id', 'repo_name', 'type',
+                     'label_count', 'labelstring',
                      'opened_date', 'opened_month', 'opened_year',
                      'closed_date', 'closed_month', 'closed_year']]
 
@@ -459,6 +488,83 @@ class GithubIssuesDB:
             print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
             self.print_exception(e, 'SQL')
         return [return_val_open, return_val_closed]
+
+
+    def count_monthly_open(self, issue_type, year, month):
+        try:
+            sql = '''
+                        SELECT Count(*) FROM %s
+                        WHERE repo_id = ?
+                        AND type = ?
+                        AND opened_month = ?
+                        AND opened_year = ?
+                        AND state = 'open'
+            ''' % (self.table,)
+            result_open = pd.read_sql(sql, self.engine, params=(self.repository_id, issue_type, month, year))
+            self.status = 0
+            return result_open.iloc[0,0]
+        except Exception as e:
+            self.status = 21
+            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            self.print_exception(e, 'SQL')
+
+
+    def count_monthly_unlabelled(self, issue_type, year, month):
+        try:
+            sql = '''
+                        SELECT Count(*) FROM %s
+                        WHERE repo_id = ?
+                        AND type = ?
+                        AND opened_month = ?
+                        AND opened_year = ?
+                        AND state = 'open'
+                        AND label_count = 0
+            ''' % (self.table,)
+            result_open = pd.read_sql(sql, self.engine, params=(self.repository_id, issue_type, month, year))
+            self.status = 0
+            return result_open.iloc[0,0]
+        except Exception as e:
+            self.status = 22
+            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            self.print_exception(e, 'SQL')
+
+
+    def count_labelled(self, issue_type, year, month):
+        return_val_open   = 'unknown'
+        return_val_closed = 'unknown'
+        try:
+            sql = '''
+                        SELECT Count(*) FROM %s
+                        WHERE repo_id = ?
+                        AND type = ?
+                        AND opened_month = ?
+                        AND opened_year = ?
+                        AND label_count > 0
+            ''' % (self.table,)
+            result_open = pd.read_sql(sql, self.engine, params=(self.repository_id, issue_type, month, year))
+            self.status = 0
+            return_val_open = result_open.iloc[0,0]
+        except Exception as e:
+            self.status = 23
+            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            self.print_exception(e, 'SQL') 
+        try:           
+            sql = '''
+                        SELECT Count(*) FROM %s
+                        WHERE repo_id = ?
+                        AND type = ?
+                        AND closed_month = ?
+                        AND closed_year = ?
+                        AND label_count > 0
+            ''' % (self.table,)
+            result_closed = pd.read_sql(sql, self.engine, params=(self.repository_id, issue_type, month, year))
+            self.status = 0
+            return_val_closed = result_closed.iloc[0,0]
+        except Exception as e:
+            self.status = 24
+            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            self.print_exception(e, 'SQL')
+        return [return_val_open, return_val_closed]
     
 
     def __get_monthly_span(self):
@@ -503,21 +609,20 @@ class GithubIssuesDB:
             self.print_exception(e, 'SQL')
             exit()
 
-
     def get_issue_ages(self, issue_type, month_end_date):
         try:
             sql = '''
                     SELECT opened_date FROM %s
                     WHERE repo_id = ?
                     AND type = ?
-                    AND date(opened_date) < ?                                
-                    AND (closed_date = "null" OR date(closed_date) > ?)
+                    AND date(opened_date) <= ?                                
+                    AND (closed_date is NULL OR date(closed_date) > ?)
                     ORDER BY opened_date
             ''' % (self.table,)
-            result = pd.DataFrame( pd.read_sql(sql,
-                                               self.engine,
-                                               parse_dates=['opened_date'],
-                                               params=(self.repository_id, issue_type, month_end_date, month_end_date)) )
+            result = pd.read_sql(sql,
+                                 self.engine,
+                                 parse_dates=['opened_date'],
+                                 params=(self.repository_id, issue_type, month_end_date, month_end_date))
             self.status = 0
             return result.applymap(lambda x: (pd.to_datetime(month_end_date) - x).days)
         except Exception as e:
@@ -566,23 +671,23 @@ class GithubIssuesDB:
 
 
     def show_statistics(self, date_range):
-        print(f"                              ISSUES              PULL REQUESTS               LABELS   ")
-        print(f"REPOSITORY  YYYY-MM     OPENED      CLOSED      OPENED      CLOSED      OPENED      CLOSED")
-        print("===========================================================================================")
+        print(f"                             ISSUES             PULL REQUESTS        CURRENTLY        CURRENTLY OPEN")
+        print(f"REPOSITORY  YYYY-MM    OPENED      CLOSED     OPENED      CLOSED       OPEN            & UNLABELLED" )
+        print("=====================================================================================================")
         repository_name = self.get_repo_name()
         for idx in date_range:
             [opened_issue_count, closed_issue_count] = self.count_issues('issue',
                                                                          idx.year, idx.month)
             [opened_pr_count, closed_pr_count]       = self.count_issues('pull_request',
                                                                          idx.year, idx.month)
-            [opened_documentation_count, closed_documentation_count] = self.count_labels('issue',
-                                                                         idx.year, idx.month, 'Documentation')
+            open_count = self.count_monthly_open('issue', idx.year, idx.month)
+            unlabelled_count = self.count_monthly_unlabelled('issue', idx.year, idx.month)
 
-            print("%10s  %4d-%02d      %4d        %4d        %4d        %4d        %4d        %4d"
+            print("%10s  %4d-%02d     %4d       %4d       %4d       %4d       %4d       %4d"
                     % (repository_name, idx.year, idx.month,
                        opened_issue_count, closed_issue_count,
                        opened_pr_count, closed_pr_count,
-                       opened_documentation_count, closed_documentation_count))
+                       open_count, unlabelled_count))
 
 
 class GithubIssuesData:
@@ -604,7 +709,10 @@ class GithubIssuesData:
         self.__plot_points             = np.arange(0,length)
         self.__opened_issue_counts     = np.zeros(length, dtype=int)
         self.__closed_issue_counts     = np.zeros(length, dtype=int)
-        self.__total_open_issue_counts = np.zeros(length, dtype=int)
+        self.__open_issue_counts             = np.zeros(length, dtype=int)
+        self.__unlabelled_issue_counts       = np.zeros(length, dtype=int)
+        self.__total_open_issue_counts       = np.zeros(length, dtype=int)
+        self.__total_unlabelled_issue_counts = np.zeros(length, dtype=int)
         self.set_month_labels(date_range, True)
         self.__issue_ages              = []
         
@@ -720,6 +828,24 @@ class GithubIssuesData:
     closed_issue_counts = property(__get_closed_issue_counts, __set_closed_issue_counts)
 
 
+    def __get_open_issue_counts(self) -> np.ndarray:
+        return self.__open_issue_counts
+        
+    def __set_open_issue_counts(self, counts: np.ndarray):
+        self.__open_issue_counts = np.copy(counts)
+
+    open_issue_counts = property(__get_open_issue_counts, __set_open_issue_counts)
+
+
+    def __get_unlabelled_issue_counts(self) -> np.ndarray:
+        return self.__unlabelled_issue_counts
+        
+    def __set_unlabelled_issue_counts(self, counts: np.ndarray):
+        self.__unlabelled_issue_counts = np.copy(counts)
+
+    unlabelled_issue_counts = property(__get_unlabelled_issue_counts, __set_unlabelled_issue_counts)
+
+
     def __get_total_open_issue_counts(self) -> np.ndarray:
         return self.__total_open_issue_counts
         
@@ -727,6 +853,15 @@ class GithubIssuesData:
         self.__total_open_issue_counts = np.copy(counts)
 
     total_open_issue_counts = property(__get_total_open_issue_counts, __set_total_open_issue_counts)
+
+
+    def __get_total_unlabelled_issue_counts(self) -> np.ndarray:
+        return self.__total_unlabelled_issue_counts
+        
+    def __set_total_unlabelled_issue_counts(self, counts: np.ndarray):
+        self.__total_unlabelled_issue_counts = np.copy(counts)
+
+    total_unlabelled_issue_counts = property(__get_total_unlabelled_issue_counts, __set_total_unlabelled_issue_counts)
 
 
     def __get_issue_ages(self) -> list:
