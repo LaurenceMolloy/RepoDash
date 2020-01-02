@@ -35,9 +35,9 @@ your codebase is managed via Github, RepoDash could be just what you need.</p>
 
 <h3>Demo Mode</h3>
 
-<p>For demo purposes, this code displays the most recent 12 months of matplotlib<sup>1</sup> metrics 
-by default. Command line arguments allow you to set your own project repository and analysis timeframe. 
-It couldn't be simpler.</p>
+<p>For demo purposes, this code processes the first 10 pages of the matplotlib<sup>1</sup> project and 
+displays the most recent 12 months of metrics by default. Command line arguments allow you to set your
+own project repository and analysis timeframe. It couldn't be simpler.</p>
 
 <sup>1</sup> *<a href="https://matplotlib.org/"><strong>matplotlib</strong></a> is a popular open science 
 plotting library for python which is utilised by RepoDash to generate its data visualisations*
