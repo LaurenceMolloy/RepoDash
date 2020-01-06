@@ -624,7 +624,7 @@ class GithubIssuesDB:
                                  parse_dates=['opened_date'],
                                  params=(self.repository_id, issue_type, month_end_date, month_end_date))
             self.status = 0
-            return result.applymap(lambda x: (pd.to_datetime(month_end_date) - x).days)
+            return result.applymap(lambda x: (pd.to_datetime(month_end_date, utc=True) - x).days)
         except Exception as e:
             self.status = 12
             print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.\n")
