@@ -1,5 +1,6 @@
 import re
 import sys, argparse
+import math
 
 from GithubIssues import GithubIssuesUtils, GithubIssuesAPI, GithubIssuesDB, GithubIssuesData
 
@@ -53,7 +54,7 @@ gd.init_arrays(data_span)
 
 
 # populate numpy data arrays for plotting
-# ([1] opened, [2] closed, [3] open & unlabelled [4] open [5] total open & [6] ages)
+# ([1] opened, [2] closed, [3] open & unlabelled [4] open & unassigned [5] open [6] total open & [6] ages)
 print("INFO Processing data...")
 i = 0
 for idx in data_span:
@@ -67,20 +68,26 @@ for idx in data_span:
                                                                 idx.year,
                                                                 idx.month)
     # [4]
+    gd.unassigned_issue_counts[i] = db.count_monthly_unassigned(args['issue_type'],
+                                                                idx.year,
+                                                                idx.month)
+    # [5]
     gd.open_issue_counts[i] = db.count_monthly_open(args['issue_type'],
                                                     idx.year,
                                                     idx.month)
-    # [5]
+    # [6]
     if i == 0:
         gd.total_open_issue_counts[0] = (gd.open_issue_counts[0]
                                          if args['offset_month'] == 'opened'
                                          else gd.opened_issue_counts[0] - gd.closed_issue_counts[0])
         gd.total_unlabelled_issue_counts[0] = gd.unlabelled_issue_counts[0]
+        gd.total_unassigned_issue_counts[0] = gd.unassigned_issue_counts[0]
     else:
         gd.total_open_issue_counts[i] = (gd.total_open_issue_counts[(i-1)] + gd.open_issue_counts[i]
                                          if args['offset_month'] == 'opened'
                                          else gd.total_open_issue_counts[(i-1)] + gd.opened_issue_counts[i] - gd.closed_issue_counts[i])
         gd.total_unlabelled_issue_counts[i] = gd.total_unlabelled_issue_counts[i-1] + gd.unlabelled_issue_counts[i]       
+        gd.total_unassigned_issue_counts[i] = gd.total_unassigned_issue_counts[i-1] + gd.unassigned_issue_counts[i]       
     # [6]
     npa = db.get_issue_ages(args['issue_type'], idx.strftime('%Y-%m-%d'))
     gd.issue_ages.append(npa.values.flatten())
@@ -100,7 +107,7 @@ w_opened = gd.opened_issue_counts[w_start:w_end].astype('float')
 w_closed = gd.closed_issue_counts[w_start:w_end].astype('float')
 monthly_sum          = np.add(w_opened, w_closed)
 monthly_issues_mix = -1 + (2 * np.true_divide(w_closed, monthly_sum,
-                                              out=np.zeros_like(w_closed),
+                                              out=np.full_like(w_closed, 0.5, dtype=np.float),
                                               where=monthly_sum!=0))
 
 # define heatmaps for displaying monthly issue mix data 
@@ -138,6 +145,7 @@ plt.subplot(3,1,1)
 opened = gd.opened_issue_counts[w_start:w_end]
 closed = gd.closed_issue_counts[w_start:w_end]
 unlabelled = gd.unlabelled_issue_counts[w_start:w_end]
+unassigned = gd.unassigned_issue_counts[w_start:w_end]
 open_issue = gd.open_issue_counts[w_start:w_end]
 
 max_height = np.concatenate([opened[1:], closed[1:]]).max()
@@ -164,13 +172,10 @@ for i in range(1,opened.size):
     plt.bar(start, unlabelled[i], width=0.5-bar_spacing,   align='edge', color='r',alpha=0.2, zorder=6)
     plt.plot([start,start+0.5-bar_spacing], [unlabelled[i],unlabelled[i]], color="w", alpha=1, linewidth=0.75, zorder=7)
 
-    # simulated unassigned
-    #import random
-    #unassigned_width = 0.05
-    #unassigned_pos = start + ((0.5 - bar_spacing)/2) - (unassigned_width/2)
-    #unassigned_count = open_issue[i] * random.randint(20,80) / 100 # simulate a variable number of unassigned issues
-    #plt.bar(unassigned_pos, unassigned_count, unassigned_width, align='edge', color='w',alpha=1, zorder=8)
-    #plt.bar(unassigned_pos, unassigned_count, unassigned_width, align='edge', color='#BB0000',alpha=0.8, zorder=9)
+    unassigned_width = 0.05
+    unassigned_pos = start + ((0.5 - bar_spacing)/2) - (unassigned_width/2)
+    plt.bar(unassigned_pos, unassigned[i], unassigned_width, align='edge', color='w',alpha=1, zorder=8)
+    plt.bar(unassigned_pos, unassigned[i], unassigned_width, align='edge', color='#BB0000',alpha=0.8, zorder=9)
 
     bbox_props = dict(boxstyle="round,pad=0.2", fc=(1,1,0.9), ec=(0.75,0,0), lw=1.5)
     ax_top.text(i-label_offset, opened[i]+(max_height*0.05),
@@ -219,15 +224,8 @@ plt.subplot(3,1,2)
 total_open = gd.total_open_issue_counts[w_start:w_end]
 total_unlabelled = gd.total_unlabelled_issue_counts[w_start:w_end]
 
-# simulation
-# total_sim = gd.total_open_issue_counts[w_start:w_end] * 0.75
-
 y_range = total_open.max() - total_open.min()
-y_padding = int(y_range * 0.1) 
-
-# offset for visibility on total open issue graph
-#offset = total_open.min() - y_padding - total_unlabelled[0]
-#np.add(total_unlabelled, max(0, offset), out=total_unlabelled)
+y_padding = math.ceil(y_range * 0.1) 
 
 # first axis created is plotted first, with axis and labels on the left
 # we want 'requires triage' count to go behind 'open' count
@@ -248,10 +246,10 @@ ax_mid_r.set_ylabel(f"Total Open {args['issue_type']}s Requiring Triage", labelp
 bbox_props = dict(boxstyle="round,pad=0.2", fc=(1,1,0.9), ec="k", lw=1.5)
 
 t = ax_mid_l.text(0.5, total_open[0]+(y_padding/2),
-                str(total_open[0]),
-                ha="center", va="bottom", rotation=0,
-                size=12, weight="bold",
-                bbox=bbox_props)
+                  str(total_open[0]),
+                  ha="center", va="bottom", rotation=0,
+                  size=12, weight="bold",
+                  bbox=bbox_props)
 
 # create monthly fill areas/lines
 for i in range(1,total_open.size):
@@ -266,18 +264,18 @@ for i in range(1,total_open.size):
 
     # time block shading
     ax_mid_r.fill_between([start,finish],
-                          [total_open.max()+10, total_open.max()+10],
-                          color='#EEEEEE', alpha=1)
+                          [total_open.max()+y_padding, total_open.max()+y_padding],
+                          y2=0, color='#EEEEEE', alpha=1)
         
     # fill areas (unlabelled)
     ax_mid_r.fill_between([start,finish],
                           total_unlabelled[i-1:i+1],
-                          facecolor='w', alpha=1)
+                          y2=0, facecolor='w', alpha=1)
     
     # fill areas (unlabelled)
     ax_mid_r.fill_between([start,finish],
                           total_unlabelled[i-1:i+1],
-                          facecolor='r', alpha=0.2)
+                          y2=0, facecolor='r', alpha=0.2)
 
     # top lines (unlabelled)
     ax_mid_r.plot([start,finish],
@@ -294,19 +292,9 @@ for i in range(1,total_open.size):
 
     # fill areas (open)
     ax_mid_l.fill_between([start_narrow,finish_narrow],
-                     total_open[i-1:i+1],
-                     color=col, alpha=1)
+                          total_open[i-1:i+1],
+                          y2=0, color=col, alpha=1)
     
-    # black borders
-    #ax_mid_l.bar(start_narrow, total_open[i-1], width=0.01,   align='edge', color='k',alpha=0.5)
-    #ax_mid_l.bar(finish_narrow-0.01, total_open[i], width=0.01,   align='edge', color='k',alpha=0.5)
-    
-    # fill area (simulation)
-    #ax_mid_l.fill_between([start+0.25,finish-0.25],
-    #                 total_sim[i-1:i+1],
-    #                 color='#BB0000', alpha=1)
-    
-
     # top lines (open)
     ax_mid_l.plot([start_narrow,finish_narrow],
                   total_open[i-1:i+1],
@@ -317,14 +305,14 @@ for i in range(1,total_open.size):
                   color="w", alpha=1, linewidth=0.3)
     
     t = ax_mid_l.text(i+0.5, total_open[i]+(y_padding/2),
-                    str(total_open[i]),
-                    ha="center", va="bottom", rotation=0,
-                    size=12, weight="bold",
-                    bbox=bbox_props)
+                      str(total_open[i]),
+                      ha="center", va="bottom", rotation=0,
+                      size=12, weight="bold",
+                      bbox=bbox_props)
 
 # plot 'requires triage' using a linearly offset scale relative to 'open'
-mid_l_range = (2 * y_padding) + total_open.max() - total_open.min()
-ax_mid_l.axis([0, total_open.size, max(0,total_open.min()-y_padding), total_open.max()+y_padding])
+mid_l_range = y_range + y_padding
+ax_mid_l.axis([0, total_open.size, total_open.min(), total_open.min() + mid_l_range])
 ax_mid_r.axis([0, total_open.size, total_unlabelled.min(), total_unlabelled.min() + mid_l_range])
 ax_mid.axis([0, total_open.size, total_unlabelled.min(), total_unlabelled.min() + mid_l_range])
 

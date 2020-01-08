@@ -73,7 +73,7 @@ class GithubIssuesUtils:
         arg_parser.add_argument('-m', '--months', type=int, default=12,
                             help="analysis timespan in months (default=12)")
         arg_parser.add_argument('-d', '--refdate', type=pd.Timestamp, default=pd.datetime.now(),
-                            help="reference date (default=now)")
+                            help="reference date ('YYYY-MM', default=now)")
         arg_parser.add_argument('-f', '--firstpage', type=int, default=1,
                             help="first page of issues to request (default=1)")
         arg_parser.add_argument('-c', '--pagecount', type=int, default=10,
@@ -311,19 +311,21 @@ class GithubIssuesDB:
         if self.table == 'issues':
             try:
                 sql = '''
-                        CREATE TABLE issues(id           INTEGER PRIMARY KEY UNIQUE,
-                                            repo_id      INTEGER,
-                                            repo_name    TEXT,
-                                            type         TEXT,
-                                            label_count  INTEGER,
-                                            labelstring  TEXT,
-                                            state        TEXT,
-                                            opened_date  TEXT,
-                                            opened_month INTEGER,
-                                            opened_year  INTEGER,
-                                            closed_date  TEXT,
-                                            closed_month INTEGER,
-                                            closed_year  INTEGER)
+                        CREATE TABLE issues(id            INTEGER PRIMARY KEY UNIQUE,
+                                            repo_id       INTEGER,
+                                            repo_name     TEXT,
+                                            type          TEXT,
+                                            label_count   INTEGER,
+                                            labelstring   TEXT,
+                                            assign_count  INTEGER,
+                                            assignstring  TEXT,
+                                            state         TEXT,
+                                            opened_date   TEXT,
+                                            opened_month  INTEGER,
+                                            opened_year   INTEGER,
+                                            closed_date   TEXT,
+                                            closed_month  INTEGER,
+                                            closed_year   INTEGER)
                         WITHOUT ROWID
                 '''
                 self.engine.execute(sql)
@@ -359,6 +361,12 @@ class GithubIssuesDB:
     def insert_issue(self, issue):
         df = json_normalize(issue)
 
+        assignstring = []
+        for label in df['assignees'][0]:
+            assignstring.append(str(label['login']))
+        df['assign_count'] = len(assignstring)
+        df['assignstring'] = ':'.join(assignstring)
+
         labelstring = []
         for label in df['labels'][0]:
             labelstring.append(str(label['name']))
@@ -383,25 +391,16 @@ class GithubIssuesDB:
                            'created_at' : 'opened_date',
                            'closed_at'  : 'closed_date'}, inplace=True)
         
-#        print (pd.DatetimeIndex(df['closed_date']))
-#        print (pd.DatetimeIndex(df['closed_date']).month)
-    
         # add month & year number fields, derived from relevant JSON datetime fields
         df['opened_month'] = pd.DatetimeIndex(df['opened_date']).month
         df['opened_year']  = pd.DatetimeIndex(df['opened_date']).year
         df['closed_month'] = pd.DatetimeIndex(df['closed_date']).month
         df['closed_year']  = pd.DatetimeIndex(df['closed_date']).year
 
-#        df['closed_month'] = (0
-#                              if pd.isnull(pd.DatetimeIndex(df['closed_date']))
-#                              else pd.DatetimeIndex(df['closed_date']).month)
-#        df['closed_year']  = (0
-#                              if pd.isnull(pd.DatetimeIndex(df['closed_date']))
-#                              else pd.DatetimeIndex(df['closed_date']).year)
-
         # Define a subset of the full dataframe for direct SQL insertion 
         record = df[['id', 'state', 'repo_id', 'repo_name', 'type',
                      'label_count', 'labelstring',
+                     'assign_count', 'assignstring',
                      'opened_date', 'opened_month', 'opened_year',
                      'closed_date', 'closed_month', 'closed_year']]
 
@@ -413,6 +412,7 @@ class GithubIssuesDB:
             print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table insertion failure.")
             self.print_exception(e, 'SQL')    
         return self.status
+
 
     def count_issues(self, issue_type, year, month):
         return_val_open   = 'unknown'
@@ -525,6 +525,26 @@ class GithubIssuesDB:
             return result_open.iloc[0,0]
         except Exception as e:
             self.status = 22
+            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            self.print_exception(e, 'SQL')
+
+
+    def count_monthly_unassigned(self, issue_type, year, month):
+        try:
+            sql = '''
+                        SELECT Count(*) FROM %s
+                        WHERE repo_id = ?
+                        AND type = ?
+                        AND opened_month = ?
+                        AND opened_year = ?
+                        AND state = 'open'
+                        AND assign_count = 0
+            ''' % (self.table,)
+            result_open = pd.read_sql(sql, self.engine, params=(self.repository_id, issue_type, month, year))
+            self.status = 0
+            return result_open.iloc[0,0]
+        except Exception as e:
+            self.status = 25
             print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
             self.print_exception(e, 'SQL')
 
@@ -671,9 +691,9 @@ class GithubIssuesDB:
 
 
     def show_statistics(self, date_range):
-        print(f"                             ISSUES             PULL REQUESTS        CURRENTLY        CURRENTLY OPEN")
-        print(f"REPOSITORY  YYYY-MM    OPENED      CLOSED     OPENED      CLOSED       OPEN            & UNLABELLED" )
-        print("=====================================================================================================")
+        print(f"                             ISSUES             PULL REQUESTS        CURRENTLY      CURRENTLY OPEN AND   ")
+        print(f"REPOSITORY  YYYY-MM    OPENED      CLOSED     OPENED      CLOSED       OPEN       UNLABELLED  UNASSIGNED ")
+        print("==========================================================================================================")
         repository_name = self.get_repo_name()
         for idx in date_range:
             [opened_issue_count, closed_issue_count] = self.count_issues('issue',
@@ -682,12 +702,13 @@ class GithubIssuesDB:
                                                                          idx.year, idx.month)
             open_count = self.count_monthly_open('issue', idx.year, idx.month)
             unlabelled_count = self.count_monthly_unlabelled('issue', idx.year, idx.month)
+            unassigned_count = self.count_monthly_unassigned('issue', idx.year, idx.month)
 
-            print("%10s  %4d-%02d     %4d       %4d       %4d       %4d       %4d       %4d"
+            print("%10s  %4d-%02d     %4d       %4d       %4d       %4d         %4d         %4d        %4d"
                     % (repository_name, idx.year, idx.month,
                        opened_issue_count, closed_issue_count,
                        opened_pr_count, closed_pr_count,
-                       open_count, unlabelled_count))
+                       open_count, unlabelled_count, unassigned_count))
 
 
 class GithubIssuesData:
@@ -711,8 +732,10 @@ class GithubIssuesData:
         self.__closed_issue_counts     = np.zeros(length, dtype=int)
         self.__open_issue_counts             = np.zeros(length, dtype=int)
         self.__unlabelled_issue_counts       = np.zeros(length, dtype=int)
+        self.__unassigned_issue_counts       = np.zeros(length, dtype=int)
         self.__total_open_issue_counts       = np.zeros(length, dtype=int)
         self.__total_unlabelled_issue_counts = np.zeros(length, dtype=int)
+        self.__total_unassigned_issue_counts = np.zeros(length, dtype=int)
         self.set_month_labels(date_range, True)
         self.__issue_ages              = []
         
@@ -846,6 +869,15 @@ class GithubIssuesData:
     unlabelled_issue_counts = property(__get_unlabelled_issue_counts, __set_unlabelled_issue_counts)
 
 
+    def __get_unassigned_issue_counts(self) -> np.ndarray:
+        return self.__unassigned_issue_counts
+        
+    def __set_unassigned_issue_counts(self, counts: np.ndarray):
+        self.__unassigned_issue_counts = np.copy(counts)
+
+    unassigned_issue_counts = property(__get_unassigned_issue_counts, __set_unassigned_issue_counts)
+
+
     def __get_total_open_issue_counts(self) -> np.ndarray:
         return self.__total_open_issue_counts
         
@@ -862,6 +894,15 @@ class GithubIssuesData:
         self.__total_unlabelled_issue_counts = np.copy(counts)
 
     total_unlabelled_issue_counts = property(__get_total_unlabelled_issue_counts, __set_total_unlabelled_issue_counts)
+
+
+    def __get_total_unassigned_issue_counts(self) -> np.ndarray:
+        return self.__total_unassigned_issue_counts
+        
+    def __set_total_unassigned_issue_counts(self, counts: np.ndarray):
+        self.__total_unassigned_issue_counts = np.copy(counts)
+
+    total_unassigned_issue_counts = property(__get_total_unassigned_issue_counts, __set_total_unassigned_issue_counts)
 
 
     def __get_issue_ages(self) -> list:
