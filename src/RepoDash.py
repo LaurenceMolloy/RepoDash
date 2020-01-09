@@ -1,11 +1,13 @@
 import re
 import sys, argparse
+import math
 
 from GithubIssues import GithubIssuesUtils, GithubIssuesAPI, GithubIssuesDB, GithubIssuesData
 
 import pandas as pd
 import numpy as np
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import to_rgba, ListedColormap
@@ -23,6 +25,11 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 gu = GithubIssuesUtils()
 args = gu.process_args()
 args = gu.args
+
+# simply report debug info and quit if -i/--info arg is supplied on cmd line
+if args['info'] == True:
+    gu.write_debug_info()
+    exit()
 
 db = GithubIssuesDB(f'{gu.data_path}/issues', 'issues', echo=False)
 # wipe and regenerate the issues database with every run.
@@ -53,7 +60,7 @@ gd.init_arrays(data_span)
 
 
 # populate numpy data arrays for plotting
-# ([1] opened, [2] closed, [3] open & unlabelled [4] open [5] total open & [6] ages)
+# ([1] opened, [2] closed, [3] open & unlabelled [4] open & unassigned [5] open [6] total open & [6] ages)
 print("INFO Processing data...")
 i = 0
 for idx in data_span:
@@ -67,20 +74,26 @@ for idx in data_span:
                                                                 idx.year,
                                                                 idx.month)
     # [4]
+    gd.unassigned_issue_counts[i] = db.count_monthly_unassigned(args['issue_type'],
+                                                                idx.year,
+                                                                idx.month)
+    # [5]
     gd.open_issue_counts[i] = db.count_monthly_open(args['issue_type'],
                                                     idx.year,
                                                     idx.month)
-    # [5]
+    # [6]
     if i == 0:
         gd.total_open_issue_counts[0] = (gd.open_issue_counts[0]
                                          if args['offset_month'] == 'opened'
                                          else gd.opened_issue_counts[0] - gd.closed_issue_counts[0])
         gd.total_unlabelled_issue_counts[0] = gd.unlabelled_issue_counts[0]
+        gd.total_unassigned_issue_counts[0] = gd.unassigned_issue_counts[0]
     else:
         gd.total_open_issue_counts[i] = (gd.total_open_issue_counts[(i-1)] + gd.open_issue_counts[i]
                                          if args['offset_month'] == 'opened'
                                          else gd.total_open_issue_counts[(i-1)] + gd.opened_issue_counts[i] - gd.closed_issue_counts[i])
         gd.total_unlabelled_issue_counts[i] = gd.total_unlabelled_issue_counts[i-1] + gd.unlabelled_issue_counts[i]       
+        gd.total_unassigned_issue_counts[i] = gd.total_unassigned_issue_counts[i-1] + gd.unassigned_issue_counts[i]       
     # [6]
     npa = db.get_issue_ages(args['issue_type'], idx.strftime('%Y-%m-%d'))
     gd.issue_ages.append(npa.values.flatten())
@@ -100,7 +113,7 @@ w_opened = gd.opened_issue_counts[w_start:w_end].astype('float')
 w_closed = gd.closed_issue_counts[w_start:w_end].astype('float')
 monthly_sum          = np.add(w_opened, w_closed)
 monthly_issues_mix = -1 + (2 * np.true_divide(w_closed, monthly_sum,
-                                              out=np.zeros_like(w_closed),
+                                              out=np.full_like(w_closed, 0.5, dtype=np.float),
                                               where=monthly_sum!=0))
 
 # define heatmaps for displaying monthly issue mix data 
@@ -121,7 +134,7 @@ for color in newcolors:       # set transparency level (same as for plots)
     color[3] = 0.75           
 
 # set monthly time block separation space
-bar_spacing = 0.1
+bar_spacing = 0.05
 
 # figure settings
 #plt.style.use('seaborn-whitegrid')
@@ -138,6 +151,7 @@ plt.subplot(3,1,1)
 opened = gd.opened_issue_counts[w_start:w_end]
 closed = gd.closed_issue_counts[w_start:w_end]
 unlabelled = gd.unlabelled_issue_counts[w_start:w_end]
+unassigned = gd.unassigned_issue_counts[w_start:w_end]
 open_issue = gd.open_issue_counts[w_start:w_end]
 
 max_height = np.concatenate([opened[1:], closed[1:]]).max()
@@ -151,18 +165,23 @@ for i in range(1,opened.size):
     finish = i + (0.5-bar_spacing)
 
     # time block shading
-    plt.bar(start, max_height*1.1, width=1-(2*bar_spacing), align='edge', color='#EEEEEE',alpha=1.0)
+    plt.bar(start, max_height*1.1, width=1-(2*bar_spacing), align='edge', color='#EEEEEE',alpha=1.0, zorder=0)
 
-    plt.bar(start, opened[i], width=0.5-bar_spacing,   align='edge', color='#BB0000',alpha=0.5)    
-    plt.bar(i, closed[i], width=0.5-bar_spacing,   align='edge', color='#00BB00',alpha=0.5)
+    plt.bar(start, opened[i], width=0.5-bar_spacing,   align='edge', color='#BB0000',alpha=0.5, zorder=1)    
+    plt.bar(i, closed[i], width=0.5-bar_spacing,   align='edge', color='#00BB00',alpha=0.5, zorder=1)
 
-    plt.bar(start, open_issue[i], width=0.5-bar_spacing,   align='edge', color='w',alpha=1)
-    plt.bar(start, open_issue[i], width=0.5-bar_spacing,   align='edge', color='r',alpha=0.4)
-    plt.plot([start,start+0.5-bar_spacing], [open_issue[i],open_issue[i]], color="w", alpha=1, linewidth=0.75)
+    plt.bar(start, open_issue[i], width=0.5-bar_spacing,   align='edge', color='w',alpha=1, zorder=2)
+    plt.bar(start, open_issue[i], width=0.5-bar_spacing,   align='edge', color='r',alpha=0.4, zorder=3)
+    plt.plot([start,start+0.5-bar_spacing], [open_issue[i],open_issue[i]], color="w", alpha=1, linewidth=0.75, zorder=4)
 
-    plt.bar(start, unlabelled[i], width=0.5-bar_spacing,   align='edge', color='w',alpha=1)
-    plt.bar(start, unlabelled[i], width=0.5-bar_spacing,   align='edge', color='r',alpha=0.2)
-    plt.plot([start,start+0.5-bar_spacing], [unlabelled[i],unlabelled[i]], color="w", alpha=1, linewidth=0.75)
+    plt.bar(start, unlabelled[i], width=0.5-bar_spacing,   align='edge', color='#EEEEEE',alpha=1, zorder=5)
+    plt.bar(start, unlabelled[i], width=0.5-bar_spacing,   align='edge', color='r',alpha=0.2, zorder=6)
+    plt.plot([start,start+0.5-bar_spacing], [unlabelled[i],unlabelled[i]], color="w", alpha=1, linewidth=0.75, zorder=7)
+
+    unassigned_width = 0.05
+    unassigned_pos = start + ((0.5 - bar_spacing)/2) - (unassigned_width/2)
+    plt.bar(unassigned_pos, unassigned[i], unassigned_width, align='edge', color='w',alpha=1, zorder=8)
+    plt.bar(unassigned_pos, unassigned[i], unassigned_width, align='edge', color='#BB0000',alpha=0.8, zorder=9)
 
     bbox_props = dict(boxstyle="round,pad=0.2", fc=(1,1,0.9), ec=(0.75,0,0), lw=1.5)
     ax_top.text(i-label_offset, opened[i]+(max_height*0.05),
@@ -194,10 +213,11 @@ plt.tick_params(
 light_red_patch   = mpatches.Patch(color='r', alpha=0.2, label=f"{args['issue_type']} requires triage")
 mid_red_patch   = mpatches.Patch(color='r', alpha=0.4, label=f"{args['issue_type']} still open")
 red_patch   = mpatches.Patch(color='#BB0000', alpha=0.5, label=f"opened {args['issue_type']}s")
+dark_red_patch   = mpatches.Patch(color='#BB0000', alpha=0.8, label=f"unassigned open {args['issue_type']}s")
 green_patch = mpatches.Patch(color='#00BB00', alpha=0.5, label=f"closed {args['issue_type']}s")
-plt.legend(handles=[light_red_patch, mid_red_patch, red_patch, green_patch],
+plt.legend(handles=[light_red_patch, mid_red_patch, dark_red_patch, red_patch, green_patch],
            bbox_to_anchor=(0, 1.02, 1, .102), loc='lower right',
-           ncol=4, borderaxespad=0)
+           ncol=5, borderaxespad=0)
 
 # Show the grid lines as dark grey lines
 plt.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=0.25)
@@ -211,21 +231,62 @@ total_open = gd.total_open_issue_counts[w_start:w_end]
 total_unlabelled = gd.total_unlabelled_issue_counts[w_start:w_end]
 
 y_range = total_open.max() - total_open.min()
-y_padding = y_range * 0.1 
+y_padding = math.ceil(y_range * 0.1) 
 
-ax_mid = plt.gca()
+# first axis created is plotted first, with axis and labels on the left
+# we want 'requires triage' count to go behind 'open' count
+ax_mid_r = plt.gca()
+ax_mid_l = ax_mid_r.twinx()
+ax_mid = ax_mid_l.twinx()
+
+# swap left and right ticks and labels around
+# we want 'open' count on left / 'requires triage' on right
+ax_mid_l.yaxis.tick_left()
+ax_mid_l.yaxis.set_label_position("left")
+ax_mid_r.yaxis.tick_right()
+ax_mid_r.yaxis.set_label_position("right")
+
+ax_mid_l.set_ylabel(f"Total Open {args['issue_type']}s", labelpad=10)
+ax_mid_r.set_ylabel(f"Total Open {args['issue_type']}s Requiring Triage", labelpad=10)
+
 bbox_props = dict(boxstyle="round,pad=0.2", fc=(1,1,0.9), ec="k", lw=1.5)
 
-t = ax_mid.text(0.5, total_open[0]+(y_padding/2),
-                str(total_open[0]),
-                ha="center", va="bottom", rotation=0,
-                size=12, weight="bold",
-                bbox=bbox_props)
+t = ax_mid_l.text(0.5, total_open[0]+(y_padding/2),
+                  str(total_open[0]),
+                  ha="center", va="bottom", rotation=0,
+                  size=12, weight="bold",
+                  bbox=bbox_props)
 
 # create monthly fill areas/lines
 for i in range(1,total_open.size):
     start  = i - (0.5-bar_spacing)
     finish = i + (0.5-bar_spacing)
+
+    start_unl  = i - 0.5
+    finish_unl = i + 0.5
+
+    start_narrow  = i - ((0.5-bar_spacing)*0.7)
+    finish_narrow = i + ((0.5-bar_spacing)*0.7)
+
+    # time block shading
+    ax_mid_r.fill_between([start,finish],
+                          [total_open.max()+y_padding, total_open.max()+y_padding],
+                          y2=0, color='#EEEEEE', alpha=1)
+        
+    # fill areas (unlabelled)
+    ax_mid_r.fill_between([start,finish],
+                          total_unlabelled[i-1:i+1],
+                          y2=0, facecolor='w', alpha=1)
+    
+    # fill areas (unlabelled)
+    ax_mid_r.fill_between([start,finish],
+                          total_unlabelled[i-1:i+1],
+                          y2=0, facecolor='r', alpha=0.2)
+
+    # top lines (unlabelled)
+    ax_mid_r.plot([start,finish],
+                  total_unlabelled[i-1:i+1],
+                  color="w", alpha=1, linewidth=3)
 
     # determine color map to use (increasing/decreasing numbers and deadband around zero)
     if monthly_issues_mix[i] < -0.05:
@@ -235,42 +296,33 @@ for i in range(1,total_open.size):
     else:
         col = "skyblue"
 
-    # time block shading
-    plt.fill_between([start,finish],
-                     [total_open.max()+10, total_open.max()+10],
-                     color='#EEEEEE', alpha=1.0)
-    # fill areas
-    plt.fill_between([start,finish],
-                     total_open[i-1:i+1],
-                     color=col, alpha=0.75)
-    # fill areas (unlabelled)
-    plt.fill_between([start,finish],
-                     total_unlabelled[i-1:i+1],
-                     color='w', alpha=1)
-    plt.fill_between([start,finish],
-                     total_unlabelled[i-1:i+1],
-                     color='r', alpha=0.2)
+    # fill areas (open)
+    ax_mid_l.fill_between([start_narrow,finish_narrow],
+                          total_open[i-1:i+1],
+                          y2=0, color=col, alpha=1)
     
-    # open top lines
-    plt.plot(        [start,finish],
-                     total_open[i-1:i+1],
-                     color="w", alpha=1, linewidth=3)
-
-    # unlabelled top lines
-    plt.plot(        [start,finish],
-                     total_unlabelled[i-1:i+1],
-                     color="w", alpha=1, linewidth=0.75)
+    # top lines (open)
+    ax_mid_l.plot([start_narrow,finish_narrow],
+                  total_open[i-1:i+1],
+                  color="w", alpha=1, linewidth=3)
+    # top lines (unlabelled)
+    ax_mid.plot([start,finish],
+                  total_unlabelled[i-1:i+1],
+                  color="w", alpha=1, linewidth=0.3)
     
-    t = ax_mid.text(i+0.5, total_open[i]+(y_padding/2),
-                    str(total_open[i]),
-                    ha="center", va="bottom", rotation=0,
-                    size=12, weight="bold",
-                    bbox=bbox_props)
+    t = ax_mid_l.text(i+0.5, total_open[i]+(y_padding/2),
+                      str(total_open[i]),
+                      ha="center", va="bottom", rotation=0,
+                      size=12, weight="bold",
+                      bbox=bbox_props)
 
-plt.axis([0, total_open.size, max(0,total_open.min()-y_padding), total_open.max()+y_padding])
-plt.ylabel(f"Total Open {args['issue_type']}s", labelpad=10)
+# plot 'requires triage' using a linearly offset scale relative to 'open'
+mid_l_range = y_range + y_padding
+ax_mid_l.axis([0, total_open.size, total_open.min(), total_open.min() + mid_l_range])
+ax_mid_r.axis([0, total_open.size, total_unlabelled.min(), total_unlabelled.min() + mid_l_range])
+ax_mid.axis([0, total_open.size, total_unlabelled.min(), total_unlabelled.min() + mid_l_range])
 
-plt.tick_params(
+ax_mid_r.tick_params(
     axis='x',          # changes apply to the x-axis
     which='both',      # both major and minor ticks are affected
     bottom=False,      # ticks along the bottom edge are off
@@ -278,27 +330,27 @@ plt.tick_params(
     labelbottom=False) # labels along the bottom edge are off
 
 # Show the grid lines as dark grey lines
-plt.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=0.25)
+ax_mid_l.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=0.25)
 
-light_red_patch   = mpatches.Patch(color='r', alpha=0.2, label=f"aggregate # of {args['issue_type']}s requiring triage")
-plt.legend(handles=[light_red_patch],
-           bbox_to_anchor=(0, 1.02, 1, .102), loc='lower right',
-           ncol=1, borderaxespad=0)
+light_red_patch   = mpatches.Patch(fc='r', alpha=0.2, label=f"aggregate # of {args['issue_type']}s requiring triage")
+ax_mid_r.legend(handles=[light_red_patch],
+                bbox_to_anchor=(0, 1.02, 1, .102), loc='lower right',
+                ncol=1, borderaxespad=0)
 
-### create a color map bar to display on teh right side of the plot
+### create a color map bar to display on the right side of the plot
 cbar_ax = inset_axes(ax[1],
                      width="2%",     # width  = 2% of parent_bbox width
                      height="100%",  # height = 100% of parent_bbox height
                      loc='lower left',
-                     bbox_to_anchor=(1.01, 0., 1, 1),
+                     bbox_to_anchor=(1.06, 0, 1, 1),
                      bbox_transform=ax[1].transAxes,
                      borderpad=0)
 
 data = np.random.randn(1, 1) # dummy 2D array (allows me to create the pcolormesh below)
 psm = ax[1].pcolormesh(data, cmap=combined_cmap, rasterized=True, vmin=-100, vmax=100)
 cbar = fig.colorbar(psm, ax=ax[1], cax=cbar_ax)
-label = f"mix of {args['issue_type']} activity\n+100 = 100% opened {args['issue_type']}s\n-100 = 100% closed {args['issue_type']}s"
-cbar.set_label(label)
+cbar.ax.get_yaxis().set_ticks([])
+cbar.ax.set_ylabel(f"<--more closed      more opened-->\nmix of {args['issue_type']} activity", rotation=90)
 
 #################################################################################
 ### BOTTOM SUBPLOT - age distribution of open issues at the end of each month ###
