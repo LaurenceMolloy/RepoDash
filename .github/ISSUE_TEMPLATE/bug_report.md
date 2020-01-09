@@ -32,7 +32,7 @@ _Please state the command line invocation that you used which gave rise to the e
 
 
 **Debug Information**
-_Please re-run the command line invocation of RepoDash that you used, with an additional the -i (system information) flag and drag and drop the **debug_info.txt** file that is generated here_
+_Please re-run the command line invocation of RepoDash that you used, using an additional -i (system information) flag and drag and drop the **debug_info.txt** file that is generated here_
 
 
 
