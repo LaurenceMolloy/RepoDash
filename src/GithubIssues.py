@@ -92,7 +92,7 @@ class GithubIssuesUtils:
         arg_parser.add_argument('-p', '--datapath', type=str, default=os.getcwd(),
                             help="path for SQLite db file (default=pwd)")
         arg_parser.add_argument('-i', '--info', action='store_true',
-                            help="print environment information for reporting bugs/issues")
+                            help="write environment info to debug_info.txt file for Github bug reporting")
         args = arg_parser.parse_args()
         self.__auth_token = vars(args)['authtoken']
         self.__account = vars(args)['user']
