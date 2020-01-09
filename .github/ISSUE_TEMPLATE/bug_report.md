@@ -38,7 +38,7 @@ _Please re-run the command line invocation of RepoDash that you used, using an a
 
 
 **Additional context**
-_If there are any other relevant details that you believe may be relevant to this situation, please state them here_
+_If there are any other details that you believe may be relevant to this situation, please state them here_
 
 
 
