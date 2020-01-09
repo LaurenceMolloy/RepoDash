@@ -11,20 +11,34 @@ assignees: ''
 
 Please provide a clear and concise description of what the bug is, providing screenshots where appropriate.
 
+
+
 1. Did you observe an error message?
-- please include the observed error message in full.
+_please include the observed error message in full_
+
+
+
 
 2. Was there an anomaly in the generated dashboard? 
-- please include a clear and concise description of the anomalous behaviour and what you expected to happen.
+_please include a clear and concise description of the anomalous behaviour and what you expected to happen_
+
+
+
 
 **Instructions for reproducing the error**
+_Please state the command line invocation that you used which gave rise to the error / anomaly_
 
-Please state the command line invocation that you used which gave rise to the error / anomaly so that the situation can be reproduced and regression tests can be written to capture this anomaly in future.
+
+
 
 **Debug Information**
+_Please re-run the command line invocation of RepoDash that you used, with an additional the -i (system information) flag and drag and drop the **debug_info.txt** file that is generated here_
 
-Please re-run the command line invocation of RepoDash that you used, with an additional the -i (system information) flag and cut and paste the information that it displays in the terminal here, in full.
+
+
 
 **Additional context**
+_If there are any other relevant details that you believe may be relevant to this situation, please state them here_
 
-If there are any other relevant details that you believe may be relevant to this situation, please state them here.
+
+
