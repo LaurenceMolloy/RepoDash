@@ -11,6 +11,14 @@ from pandas.io.json import json_normalize
 from dateutil.relativedelta import relativedelta
 from pandas.tseries.offsets import MonthEnd, MonthBegin
 
+# required here for debug info reporting only
+import subprocess
+import platform
+import struct
+import locale
+import sqlalchemy
+import matplotlib
+
 
 class bcolors:
     HEADER = '\033[95m'
@@ -48,7 +56,8 @@ class GithubIssuesUtils:
                 'ref_date' : self.__ref_date,
                 'first_page' : self.__first_page,
                 'page_count' : self.__page_count,
-                'offset_month' : self.__offset_month
+                'offset_month' : self.__offset_month,
+                'info' : self.__info
                 }
 
     def __set_args(self, args : dict):
@@ -82,6 +91,8 @@ class GithubIssuesUtils:
                             help="which month to offset issue closure in (default=closed")
         arg_parser.add_argument('-p', '--datapath', type=str, default=os.getcwd(),
                             help="path for SQLite db file (default=pwd)")
+        arg_parser.add_argument('-i', '--info', action='store_true',
+                            help="print environment information for reporting bugs/issues")
         args = arg_parser.parse_args()
         self.__auth_token = vars(args)['authtoken']
         self.__account = vars(args)['user']
@@ -93,7 +104,68 @@ class GithubIssuesUtils:
         self.__page_count = vars(args)['pagecount']
         self.__offset_month = vars(args)['offsetmonth']
         self.__data_path = vars(args)['datapath']
+        self.__info = vars(args)['info']
         return self.args
+
+
+    def write_debug_info(self):
+        """
+        Writes system, python, module & commit information to a debug_info.txt file
+        """
+        debug_info = []
+
+        # get short commit hash
+        commit = None
+        if os.path.isdir(".git"):
+            try:
+                pipe = subprocess.Popen(
+                    'git rev-parse --short HEAD'.split(" "),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                so, serr = pipe.communicate()
+            except (OSError, ValueError):
+                pass
+            else:
+                if pipe.returncode == 0:
+                    commit = so.decode('utf-8').strip().strip('"')
+
+        debug_info.append(("commit", commit))
+
+        try:
+            (sysname, nodename, release, version, machine, processor) = platform.uname()
+            debug_info.extend(
+                [
+                    ('local timezone', subprocess.check_output(["date", "+%Z"]).decode('utf-8').strip().strip('"')),
+                    ('command line', ' '.join(map(str, sys.argv))),
+                    ("python", ".".join(map(str, sys.version_info))),
+                    ("python-bits", struct.calcsize("P") * 8),
+                    ("OS", f"{sysname}"),
+                    ("OS-release", f"{release}"),
+                    ("Version", "{version}".format(version=version)),
+                    ("machine", f"{machine}"),
+                    ("processor", f"{processor}"),
+                    ("byteorder", f"{sys.byteorder}"),
+                    ("LC_ALL", f"{os.environ.get('LC_ALL', 'None')}"),
+                    ("LANG", f"{os.environ.get('LANG', 'None')}"),
+                    ("LOCALE", ".".join(map(str, locale.getlocale()))),
+                    ('requests' , requests.__version__),
+                    ('pandas' , pd.__version__),
+                    ('sqlalchemy' , sqlalchemy.__version__),
+                    ('numpy' , np.__version__),
+                    ('matplotlib' , matplotlib.__version__),
+                ]
+            )
+            f = open("debug_info.txt", "w")
+            f.write("DEBUG INFO\n")
+            f.write("----------\n")
+            for item in debug_info:
+                f.write(f"{item[0]}: {item[1]}\n")
+            # pd.show_versions(as_json=False)
+            f.close()
+        except (KeyError, ValueError):
+            pass
+
 
 
     def get_plot_monthly_span(self, length_constraint = None):

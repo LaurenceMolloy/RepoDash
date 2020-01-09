@@ -7,6 +7,7 @@ from GithubIssues import GithubIssuesUtils, GithubIssuesAPI, GithubIssuesDB, Git
 import pandas as pd
 import numpy as np
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import to_rgba, ListedColormap
@@ -24,6 +25,11 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 gu = GithubIssuesUtils()
 args = gu.process_args()
 args = gu.args
+
+# simply report debug info and quit if -i/--info arg is supplied on cmd line
+if args['info'] == True:
+    gu.write_debug_info()
+    exit()
 
 db = GithubIssuesDB(f'{gu.data_path}/issues', 'issues', echo=False)
 # wipe and regenerate the issues database with every run.
