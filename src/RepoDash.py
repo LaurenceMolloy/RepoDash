@@ -26,14 +26,14 @@ gu = GithubIssuesUtils()
 args = gu.process_args()
 args = gu.args
 
-# simply report debug info and quit if -i/--info arg is supplied on cmd line
+# simply write debug info to a file and quit if -i/--info arg is supplied
 if args['info'] == True:
     gu.write_debug_info()
     exit()
 
+# wipe and create an empty issues database table with every run
+# (future versions may implement incremental update capabilities)
 db = GithubIssuesDB(f'{gu.data_path}/issues', 'issues', echo=False)
-# wipe and regenerate the issues database with every run.
-# future versions may implement more extensive CRUD capabilities
 db.drop_table()
 db.create_table()
 
@@ -53,14 +53,13 @@ if db.count_records(f"{args['issue_type']}") == 0:
     print (f"ERROR: no {args['issue_type']}s found")
     exit()
 
+# initialise numpy arrays for plotting data
 gd = GithubIssuesData()
 data_span = db.monthly_span
 gd.init_arrays(data_span)
 
-
-
 # populate numpy data arrays for plotting
-# ([1] opened, [2] closed, [3] open & unlabelled [4] open & unassigned [5] open [6] total open & [6] ages)
+# ([1] opened, [2] closed, [3] open & unlabelled [4] open & unassigned [5] open [6] total open & [7] ages)
 print("INFO Processing data...")
 i = 0
 for idx in data_span:
@@ -94,18 +93,19 @@ for idx in data_span:
                                          else gd.total_open_issue_counts[(i-1)] + gd.opened_issue_counts[i] - gd.closed_issue_counts[i])
         gd.total_unlabelled_issue_counts[i] = gd.total_unlabelled_issue_counts[i-1] + gd.unlabelled_issue_counts[i]       
         gd.total_unassigned_issue_counts[i] = gd.total_unassigned_issue_counts[i-1] + gd.unassigned_issue_counts[i]       
-    # [6]
+    # [7]
     npa = db.get_issue_ages(args['issue_type'], idx.strftime('%Y-%m-%d'))
     gd.issue_ages.append(npa.values.flatten())
     i += 1
 
 # identify start and end array indices for requested plotting time span
 [w_start, w_end] = gd.set_plot_window(args)
-w_start -= 1
-w_end += 1
+w_start -= 1 # we want 1 month prior as well
+w_end += 1   # account for open ended ranges
 
-#db.show_issues(f"{args['issue_type']}")
-#db.show_statistics(gd.plot_window)
+# optional debug functions
+# db.show_issues(f"{args['issue_type']}")
+# db.show_statistics(gd.plot_window)
 
 # calculate monthly mix of opened/closed issues
 # range = [-1, 1], -ve => closed > opened, +ve => opened > closed
@@ -122,7 +122,7 @@ cm_reds   = cm.get_cmap('Reds', 15)   # red   = bad  (list growth)
 cm_greens.set_over('#FFFF00')         # use yellow as default out of range green colour
 cm_reds.set_over('#FF00FF')           # use purple as default out of range red colour
 
-# constrauct the colorbar from the heatmaps
+# construct the colorbar from the heatmaps
 pos_cmap = cm.get_cmap('Greens_r', 15)
 neg_cmap = cm.get_cmap('Reds', 15)
 newcolors = np.vstack((pos_cmap(np.linspace(0, 0.7, 15)),
@@ -146,81 +146,173 @@ fig.suptitle(title, fontsize=16)
 #######################################################################
 ### TOP SUBPLOT - count of issues opened or closed during the month ###
 #######################################################################
-plt.subplot(3,1,1)
 
-opened = gd.opened_issue_counts[w_start:w_end]
-closed = gd.closed_issue_counts[w_start:w_end]
-unlabelled = gd.unlabelled_issue_counts[w_start:w_end]
-unassigned = gd.unassigned_issue_counts[w_start:w_end]
-open_issue = gd.open_issue_counts[w_start:w_end]
-
-max_height = np.concatenate([opened[1:], closed[1:]]).max()
-
-ax_top = plt.gca()
-label_offset = (0.5 - bar_spacing) / 2
+def plot_monthly_bar(x, y, label_offset_y=None, ax=None, **kwargs):
     
-# create monthly fill areas/lines
-for i in range(1,opened.size):
-    start  = i - (0.5-bar_spacing)
-    finish = i + (0.5-bar_spacing)
-
-    # time block shading
-    plt.bar(start, max_height*1.1, width=1-(2*bar_spacing), align='edge', color='#EEEEEE',alpha=1.0, zorder=0)
-
-    plt.bar(start, opened[i], width=0.5-bar_spacing,   align='edge', color='#BB0000',alpha=0.5, zorder=1)    
-    plt.bar(i, closed[i], width=0.5-bar_spacing,   align='edge', color='#00BB00',alpha=0.5, zorder=1)
-
-    plt.bar(start, open_issue[i], width=0.5-bar_spacing,   align='edge', color='w',alpha=1, zorder=2)
-    plt.bar(start, open_issue[i], width=0.5-bar_spacing,   align='edge', color='r',alpha=0.4, zorder=3)
-    plt.plot([start,start+0.5-bar_spacing], [open_issue[i],open_issue[i]], color="w", alpha=1, linewidth=0.75, zorder=4)
-
-    plt.bar(start, unlabelled[i], width=0.5-bar_spacing,   align='edge', color='#EEEEEE',alpha=1, zorder=5)
-    plt.bar(start, unlabelled[i], width=0.5-bar_spacing,   align='edge', color='r',alpha=0.2, zorder=6)
-    plt.plot([start,start+0.5-bar_spacing], [unlabelled[i],unlabelled[i]], color="w", alpha=1, linewidth=0.75, zorder=7)
-
-    unassigned_width = 0.05
-    unassigned_pos = start + ((0.5 - bar_spacing)/2) - (unassigned_width/2)
-    plt.bar(unassigned_pos, unassigned[i], unassigned_width, align='edge', color='w',alpha=1, zorder=8)
-    plt.bar(unassigned_pos, unassigned[i], unassigned_width, align='edge', color='#BB0000',alpha=0.8, zorder=9)
-
-    bbox_props = dict(boxstyle="round,pad=0.2", fc=(1,1,0.9), ec=(0.75,0,0), lw=1.5)
-    ax_top.text(i-label_offset, opened[i]+(max_height*0.05),
-                str(opened[i]),
-                ha="center", va="top", rotation=0,
-                size=12, weight="bold",
-                bbox=bbox_props)
     
-    bbox_props = dict(boxstyle="round,pad=0.2", fc=(1,1,0.9), ec=(0,0.75,0), lw=1.5)
-    ax_top.text(i+label_offset, closed[i]+(max_height*0.05),
-                str(closed[i]),
+    # provide default axis if axis is not specified
+    if ax is None:
+        ax = plt.gca()
+
+    config = {'color': 'w', 'alpha': 1, 'zorder': 1, 'width': 1, 'align': 'edge',
+              'line_color': 'w', 'line_alpha': 1, 'line_width': 1,
+              **kwargs.get('config', {})}
+
+    start_x = (x if config['align'] == 'edge' else x-(config['width']/2))
+
+    if y > 0:
+        ax.bar(x, y, width=config['width'], align=config['align'],
+               color='w',
+               alpha=1,
+               zorder=config['zorder'])
+        ax.bar(x, y, width=config['width'], align=config['align'],
+               color=config['color'],
+               alpha=config['alpha'],
+               zorder=config['zorder'])
+        ax.plot([start_x,start_x+config['width']], [y,y],
+                linewidth=config['line_width'],
+                color=config['line_color'],
+                alpha=config['line_alpha'],
+                zorder=config['zorder'])
+    
+    if label_offset_y is not None:
+        label_offset_x = config['width'] / 2
+        bbox_props = dict(boxstyle="round,pad=0.2", fc=(1,1,0.9), ec=(0.75,0,0), lw=1.5)
+        ax.text(start_x+label_offset_x, y+label_offset_y,
+                str(y),
                 ha="center", va="top", rotation=0,
                 size=12, weight="bold",
                 bbox=bbox_props)
 
-plt.axis([0, opened.size, 0, max_height*1.1])
+def plot_monthly_counts(opened_counts, closed_counts , ax=None, **kwargs):
+    
+    # provide default axis if axis is not specified
+    if ax is None:
+        ax = plt.gca()
+    
+    # process configuration values, setting to default values where silent
+    tbox_config = {'color': '#EEEEEE', 'alpha': 1, 'zorder': 0, 'align': 'edge', 
+                   'line_color': 'w', 'line_alpha': 0, 'line_width': 0, 'spacing': 0.1,
+                   **kwargs.get('tbox_config', {})}
+    tbox_config.update({'width': 1 - (2 * tbox_config['spacing'])})
+    
+    opened_config = {'color': '#BB0000', 'alpha': 0.5, 'zorder': 1, 'align': 'center', 
+                     'line_color': 'w', 'line_alpha': 1, 'line_width': 1, 'width_pct': 0.45,
+                     **kwargs.get('opened_config', {})}
+    opened_config.update({'width': opened_config['width_pct']*tbox_config['width']})
 
-plt.gca().invert_yaxis()
+    closed_config = {'color': '#00BB00', 'alpha': 0.5, 'zorder': 2, 'align': 'center',
+                     'line_color': 'w', 'line_alpha': 1, 'line_width': 1, 'width_pct': 0.45,
+                     **kwargs.get('closed_config', {})}
+    closed_config.update({'width': closed_config['width_pct']*tbox_config['width']})
+    
+    open_config = {'color': '#FF0000', 'alpha': 0.4, 'zorder': 3, 'align': 'center',
+                   'line_color': 'w', 'line_alpha': 1, 'line_width': 1, 'width_pct': 0.45,
+                   **kwargs.get('open_config', {})}
+    open_config.update({'width': open_config['width_pct']*tbox_config['width']})
+    
+    unlabelled_config = {'color': '#FF0000', 'alpha': 0.2, 'zorder': 4, 'align': 'center',
+                         'line_color': 'w', 'line_alpha': 1, 'line_width': 1, 'width_pct': 0.45,
+                         **kwargs.get('unlabelled_config', {})}
+    unlabelled_config.update({'width': unlabelled_config['width_pct']*tbox_config['width']})
+    
+    unassigned_config = {'color': '#BB0000', 'alpha': 0.8, 'zorder': 5, 'align': 'center',
+                         'line_color': 'w', 'line_alpha': 0, 'line_width': 0, 'width_pct': 0.05,
+                         **kwargs.get('unassigned_config', {})}
+    unassigned_config.update({'width': unassigned_config['width_pct']*tbox_config['width']})
+    
+    # process other keyword arguments
+    unlabelled_counts = kwargs.get('unlabelled_counts', [])
+    unassigned_counts = kwargs.get('unassigned_counts', [])
+    open_counts = kwargs.get('open_counts', [])    
+    start_idx = kwargs.get('start_idx', 0)
+    end_idx = kwargs.get('end_idx', None)
 
-plt.ylabel(f"Newly Opened/Closed {args['issue_type']}s", labelpad=10)
+    # define data slices according to start_idx and end_idx, with sensible defaults
+    if end_idx is None:
+        opened = opened_counts[start_idx:]
+        closed = closed_counts[start_idx:]
+        unlabelled = (unlabelled_counts[start_idx:] if unlabelled_counts is not None else [])
+        unassigned = (unassigned_counts[start_idx:] if unassigned_counts is not None else [])
+        open_issue = (open_counts[start_idx:] if open_counts is not None else [])
+    else:
+        opened = opened_counts[start_idx:end_idx]
+        closed = closed_counts[start_idx:end_idx]
+        unlabelled = (unlabelled_counts[start_idx:end_idx] if unlabelled_counts is not None else [])
+        unassigned = (unassigned_counts[start_idx:end_idx] if unassigned_counts is not None else [])
+        open_issue = (open_counts[start_idx:end_idx] if open_counts is not None else [])
 
-plt.tick_params(
-    axis='x',          # changes apply to the x-axis
-    which='both',      # both major and minor ticks are affected
-    bottom=False,      # ticks along the bottom edge are off
-    top=False,         # ticks along the top edge are off
-    labelbottom=False) # labels along the bottom edge are off
+    # calculate required axis height, allowing for some headroom
+    ax_height = math.ceil(np.concatenate([opened[1:], closed[1:]]).max() * 1.1)
 
-light_red_patch   = mpatches.Patch(color='r', alpha=0.2, label=f"{args['issue_type']} requires triage")
-mid_red_patch   = mpatches.Patch(color='r', alpha=0.4, label=f"{args['issue_type']} still open")
-red_patch   = mpatches.Patch(color='#BB0000', alpha=0.5, label=f"opened {args['issue_type']}s")
-dark_red_patch   = mpatches.Patch(color='#BB0000', alpha=0.8, label=f"unassigned open {args['issue_type']}s")
-green_patch = mpatches.Patch(color='#00BB00', alpha=0.5, label=f"closed {args['issue_type']}s")
-plt.legend(handles=[light_red_patch, mid_red_patch, dark_red_patch, red_patch, green_patch],
-           bbox_to_anchor=(0, 1.02, 1, .102), loc='lower right',
-           ncol=5, borderaxespad=0)
+    # create monthly fill areas/lines
+    for i in range(1,opened.size):
+        start  = i - (tbox_config['width']/2)
+        finish = i + (tbox_config['width']/2)
 
-# Show the grid lines as dark grey lines
-plt.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=0.25)
+        # time block shading
+        plot_monthly_bar(start, ax_height, ax=ax, config=tbox_config)
+
+        # 'opened this month' count bar
+        x = (start if opened_config['align'] == 'edge' else (start+i)/2)
+        plot_monthly_bar(x, opened[i], label_offset_y=(ax_height*0.05), ax=ax, config=opened_config)
+        
+        # 'closed this month' count bar
+        x = (i if closed_config['align'] == 'edge' else (i+finish)/2)
+        plot_monthly_bar(x, closed[i], label_offset_y=(ax_height*0.05), ax=ax, config=closed_config)
+
+        # (optional) 'opened this month & currently still open' count bar
+        if len(open_issue) > 0:
+            x = (start if open_config['align'] == 'edge' else (start+i)/2)
+            plot_monthly_bar(x, open_issue[i], ax=ax, config=open_config)
+
+        # (optional) 'opened this month, currently still open & unlabelled' count bar
+        if len(unlabelled) > 0:
+            x = (start if unlabelled_config['align'] == 'edge' else (start+i)/2)
+            plot_monthly_bar(x, unlabelled[i], ax=ax, config=unlabelled_config)
+        
+        # (optional) 'opened this month, currently still open & unassigned' count bar
+        if len(unassigned) > 0:
+            x = (start if unassigned_config['align'] == 'edge' else (start+i)/2)
+            plot_monthly_bar(x, unassigned[i], ax=ax, config=unassigned_config)
+    
+    ax.axis([0, opened.size, 0, ax_height])
+    ax.invert_yaxis()
+    ax.set_ylabel(f"Newly Opened/Closed {args['issue_type']}s", labelpad=10)
+
+    ax.tick_params(
+        axis='x',          # changes apply to the x-axis
+        which='both',      # both major and minor ticks are affected
+        bottom=False,      # ticks along the bottom edge are off
+        top=False,         # ticks along the top edge are off
+        labelbottom=False) # labels along the bottom edge are off
+ 
+    legend = []
+    legend.append(mpatches.Patch(color=opened_config['color'], alpha=opened_config['alpha'],
+                                 label=f"opened {args['issue_type']}s"))
+    legend.append(mpatches.Patch(color=closed_config['color'], alpha=closed_config['alpha'],
+                                 label=f"closed {args['issue_type']}s"))
+    if len(open_issue) > 0:
+        legend.append(mpatches.Patch(color=open_config['color'], alpha=open_config['alpha'],
+                                     label=f"{args['issue_type']}s still open"))
+    if len(unlabelled) > 0:
+        legend.append(mpatches.Patch(color=unlabelled_config['color'], alpha=unlabelled_config['alpha'],
+                                     label=f"{args['issue_type']}s requires triage"))
+    if len(unassigned) > 0:
+        legend.append(mpatches.Patch(color=unassigned_config['color'], alpha=unassigned_config['alpha'],
+                                     label=f"unassigned open {args['issue_type']}s"))
+    ax.legend(handles=legend, ncol=len(legend), borderaxespad=0, bbox_to_anchor=(0, 1.02, 1, .102), loc='lower right')
+
+    # Show the grid lines as dark grey lines
+    ax.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=0.25)
+
+
+# calling code for topmost metrics dashboard (monthly counts)
+ax_top = plt.subplot(3,1,1)
+plot_monthly_counts(gd.opened_issue_counts, gd.closed_issue_counts, start_idx=w_start, end_idx=w_end, ax=ax_top,
+                    open_counts=gd.open_issue_counts,
+                    unlabelled_counts=gd.unlabelled_issue_counts,
+                    unassigned_counts=gd.unassigned_issue_counts)
 
 ###########################################################################
 ### MIDDLE SUBPLOT - total issues open at the start & end of each month ###
@@ -357,6 +449,14 @@ cbar.ax.set_ylabel(f"<--more closed      more opened-->\nmix of {args['issue_typ
 #################################################################################
 plt.subplot(3,1,3)
 
+def adjacent_values(vals, q1, q3):
+    upper_adjacent_value = q3 + (q3 - q1) * 1.5
+    upper_adjacent_value = np.clip(upper_adjacent_value, q3, vals[-1])
+
+    lower_adjacent_value = q1 - (q3 - q1) * 1.5
+    lower_adjacent_value = np.clip(lower_adjacent_value, vals[0], q1)
+    return lower_adjacent_value, upper_adjacent_value
+
 ages = gd.issue_ages[w_start:w_end]
 positions = np.arange(0,len(ages))
 labels = gd.month_labels[w_start:w_end]
@@ -378,9 +478,33 @@ for i in range(1,len(ages)):
     plt.fill_between([start,finish], [360,360], color='#EEEEAA', alpha=0.5)
     plt.fill_between([start,finish], [180,180],   color='#AAEEAA', alpha=0.5)
 
-plt.boxplot(ages[1:], positions=positions[1:],
-            widths=0.4, whis=[5, 95], notch=True, showfliers=False,
-            patch_artist=True, medianprops=medianprops)
+parts = plt.violinplot(ages[1:], positions=positions[1:],
+                       showmeans=False, showmedians=False, showextrema=False)
+
+for pc in parts['bodies']:
+    pc.set_facecolor('#D43F3A')
+    pc.set_edgecolor('black')
+    pc.set_alpha(1)
+
+quartile1 = []
+medians = []
+quartile3 = []
+for month in ages:
+    q1, m, q3 = np.percentile(month.tolist(), [25, 50, 75], axis=0)
+    quartile1.append(q1)
+    medians.append(m)
+    quartile3.append(q3)
+
+whiskers = np.array([adjacent_values(sorted_array, q1, q3)
+                     for sorted_array, q1, q3
+                     in zip(ages, quartile1, quartile3)])
+whiskersMin, whiskersMax = whiskers[1:, 0], whiskers[1:, 1]
+
+inds = np.arange(0, len(medians))
+plt.scatter(inds[1:], medians[1:], marker='o', color='white', s=30, zorder=3)
+plt.vlines(inds[1:], quartile1[1:], quartile3[1:], color='k', linestyle='-', lw=5)
+plt.vlines(inds[1:], whiskersMin, whiskersMax, color='k', linestyle='-', lw=1)
+
 plt.axis([0,len(ages),0,max_age])
 plt.xticks(np.arange(labels.size), labels, rotation=60) 
 plt.xlabel("Calendar Month")

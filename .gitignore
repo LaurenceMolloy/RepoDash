@@ -1,5 +1,9 @@
 # ignore files called "ignore"
 
+issues.db
+
+test/tdda/
+
 src/ignore/
 src/__pycache__
 src/issues.db
