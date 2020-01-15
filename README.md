@@ -1,5 +1,8 @@
 ![Screenshot](docs/images/RepoDash_screenshot.png)
 
+See our <a href="https://laurencemolloy.github.io/RepoDash/"><strong>github.io pages</strong></a> 
+for detailed instructions on how to use RepoDash.
+
 <h1>Welcome to RepoDash</h1>
 
 <p>Do you maintain a project codebase on Github? Would you like to be able to collate statistics 
