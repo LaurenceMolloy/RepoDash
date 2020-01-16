@@ -192,7 +192,7 @@ def plot_monthly_counts(opened_counts, closed_counts , ax=None, **kwargs):
     
     # process configuration values, setting to default values where silent
     tbox_config = {'color': '#EEEEEE', 'alpha': 1, 'zorder': 0, 'align': 'edge', 
-                   'line_color': 'w', 'line_alpha': 0, 'line_width': 0, 'spacing': 0.1,
+                   'line_color': 'w', 'line_alpha': 0, 'line_width': 0, 'spacing': 0.05,
                    **kwargs.get('tbox_config', {})}
     tbox_config.update({'width': 1 - (2 * tbox_config['spacing'])})
     
@@ -322,7 +322,9 @@ plt.subplot(3,1,2)
 total_open = gd.total_open_issue_counts[w_start:w_end]
 total_unlabelled = gd.total_unlabelled_issue_counts[w_start:w_end]
 
-y_range = total_open.max() - total_open.min()
+
+y_range = max(total_open.max() - total_open.min(), total_unlabelled.max() - total_unlabelled.min())
+# y_range = total_open.max() - total_open.min()
 y_padding = math.ceil(y_range * 0.1) 
 
 # first axis created is plotted first, with axis and labels on the left
