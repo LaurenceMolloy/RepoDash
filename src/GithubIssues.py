@@ -463,7 +463,7 @@ class GithubIssuesDB:
                            'created_at' : 'opened_date',
                            'closed_at'  : 'closed_date'}, inplace=True)
  
-        # remote time & timezone info from datestamp
+        # remove time & timezone info from datestamp
         df['opened_date'] = pd.DatetimeIndex(df['opened_date']).date
         df['closed_date'] = pd.DatetimeIndex(df['closed_date']).date
  
