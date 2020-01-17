@@ -57,6 +57,7 @@ class GithubIssuesUtils:
                 'first_page' : self.__first_page,
                 'page_count' : self.__page_count,
                 'offset_month' : self.__offset_month,
+                'save_file' : self.__save_file,
                 'info' : self.__info
                 }
 
@@ -91,9 +92,11 @@ class GithubIssuesUtils:
                             help="which month to offset issue closure in (default=closed")
         arg_parser.add_argument('-p', '--datapath', type=str, default=os.getcwd(),
                             help="path for SQLite db file (default=pwd)")
+        arg_parser.add_argument('-s', '--savefile', type=str, nargs='?', action='store', const='metrics.png', default=None,
+                            help="save result to a file (optional file name, default = metrics.png)")
         arg_parser.add_argument('-i', '--info', action='store_true',
                             help="write environment info to debug_info.txt file for Github bug reporting")
-        args = arg_parser.parse_args()
+        args = arg_parser.parse_args()        
         self.__auth_token = vars(args)['authtoken']
         self.__account = vars(args)['user']
         self.__repo = vars(args)['repo']
@@ -103,6 +106,7 @@ class GithubIssuesUtils:
         self.__first_page = vars(args)['firstpage']
         self.__page_count = vars(args)['pagecount']
         self.__offset_month = vars(args)['offsetmonth']
+        self.__save_file = vars(args)['savefile']
         self.__data_path = vars(args)['datapath']
         self.__info = vars(args)['info']
         return self.args

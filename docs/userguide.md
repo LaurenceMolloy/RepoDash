@@ -66,12 +66,18 @@ issue metrics. The available command line options are as follows:
 <tr><th>-f, --firstpage</th>     <th>first page number to request</th>            <th>(default: 1)</th></tr>
 <tr><th>-c, --pagecount</th>     <th>number of pages of issues to request</th>    <th>(default: 10)</th></tr>
 <tr><th>-o, --offsetmonth</th>   <th>which month to offset issue closure in ('opened', 'closed')</th>  <th>(default: closed)</th></tr>
+<tr><th>-s, --savefile</th>      <th>save dashboard image to a file</th>          <th>(default: ./metrics.png)</th></tr>
 <tr><th>-p, --datapath</th>      <th>location of SQLite database</th>             <th>(default: REPODASH_PATH/data)</th></tr>
+<tr><th>-i, --info</th>          <th>write environment info for debugging</th>    <th>writes a debug_info.txt file</th></tr>
 <tr><th>-h, --help</th>          <th>print options/help text</th>                 <th></th></tr>
 </table>
 </p>
 
 <h3>Important Notes</h3>
+
+**Output:** By default, RepoDash renders the output as an image in a window on the desktop. You can override this and 
+save the image to a file for sharing by email or inclusion in a report by using the **-s** argument. When used without 
+specifying a filename, it defaults to saving to a file called _**metrics.png**_ in the current folder.
 
 **Authentication:** You can run RepoDash against any public Github repository without authentication. 
 This limits you to 60 Github API web requests per hour. If you have a Github account you can request a 
@@ -112,14 +118,15 @@ Process the first 6 pages of the issues list from the Numpy repository and plot 
 **EXAMPLE3: Pandas Issues (with issue closure offset in the month in which it was closed)** 
 
 Process pages 200 to 249 (50 pages) of the issues list from the Pandas repository and plot the last 6 months of issue 
-metrics. Silent **-o** (offset month) option defaults to 'closed', which calculates _Total Open Issues_ as a simple 
-aggregate of issues opened - issues closed in each month.
+metrics.
 
     python3 RepoDash.py -u pandas-dev -r pandas -m 6 -f 200 -c 50
 
 ![Screenshot](images/RepoDash_UserGuide_Ex3_Pandas_issue.png)
 
 **Notes**
+- The silent **-o** (offset month) option defaults to 'closed', which calculates _Total Open Issues_ as a simple 
+aggregate of issues opened - issues closed in each month.
 - The silent **-d** (reference date) argument defaults to _now_. This falls outside of the date range observed in the data 
 processed, so RepoDash maps the plotting timeframe to the last 6 calendar months of the data (6 months is our requested timespan).
 - RepoDash has no knowledge of any issues that were opened or closed prior to the earliest issues processed. For simplicity, it

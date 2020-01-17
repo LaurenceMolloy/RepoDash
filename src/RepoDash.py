@@ -524,4 +524,8 @@ plt.legend(handles=[above_patch, target_patch, below_patch],
            ncol=3,
            borderaxespad=0)
 
-plt.show()
+if args['save_file'] is None:
+    plt.show()
+else:
+    print(f"{gu.stacktrace()} INFO writing metrics image to file ({args['save_file']}).") 
+    plt.savefig(args['save_file'])
