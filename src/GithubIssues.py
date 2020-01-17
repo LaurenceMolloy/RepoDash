@@ -462,7 +462,11 @@ class GithubIssuesDB:
         df.rename(columns={'number'     : 'id',
                            'created_at' : 'opened_date',
                            'closed_at'  : 'closed_date'}, inplace=True)
-        
+ 
+        # remove time & timezone info from datestamp
+        df['opened_date'] = pd.DatetimeIndex(df['opened_date']).date
+        df['closed_date'] = pd.DatetimeIndex(df['closed_date']).date
+ 
         # add month & year number fields, derived from relevant JSON datetime fields
         df['opened_month'] = pd.DatetimeIndex(df['opened_date']).month
         df['opened_year']  = pd.DatetimeIndex(df['opened_date']).year
@@ -713,10 +717,11 @@ class GithubIssuesDB:
             ''' % (self.table,)
             result = pd.read_sql(sql,
                                  self.engine,
-                                 parse_dates=['opened_date'],
+                                 parse_dates={'opened_date': {'format': '%Y-%m-%d', 'utc': True}},
                                  params=(self.repository_id, issue_type, month_end_date, month_end_date))
             self.status = 0
-            return result.applymap(lambda x: (pd.to_datetime(month_end_date) - x).days)
+            month_end_date = pd.to_datetime(month_end_date, format='%Y-%m-%d', utc=True)
+            return result.applymap(lambda x: (month_end_date - x).days)
         except Exception as e:
             self.status = 12
             print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.\n")
@@ -727,7 +732,7 @@ class GithubIssuesDB:
     def show_issues(self, issue_type):
         try:
             sql =   '''
-                        SELECT  id, repo_name, type, state,
+                        SELECT  id, repo_name, type, state, opened_date, closed_date,
                                 opened_month, opened_year,
                                 closed_month, closed_year FROM %s
                         WHERE repo_id = ?
