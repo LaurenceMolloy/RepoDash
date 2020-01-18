@@ -724,7 +724,16 @@ class GithubIssuesDB:
                                  parse_dates={'opened_date': {'format': '%Y-%m-%d', 'utc': True}},
                                  params=(self.repository_id, issue_type, month_end_date, month_end_date))
             self.status = 0
+            
             month_end_date = pd.to_datetime(month_end_date, format='%Y-%m-%d', utc=True)
+            if result.empty:
+                month = calendar.month_abbr[month_end_date.month]
+                year = month_end_date.year
+                print(f"{self.stacktrace()} WARN no open {issue_type}s remained at month end for {month} {year}.")
+                print(f"{self.stacktrace()} WARN returning an empty dataframe.")
+                # create a minimal dataframe (required to keep box & violin plots happy)
+                result = pd.DataFrame([float('nan'), float('nan')])
+                return result
             return result.applymap(lambda x: (month_end_date - x).days)
         except Exception as e:
             self.status = 12

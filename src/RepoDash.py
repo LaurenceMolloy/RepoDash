@@ -96,6 +96,10 @@ for idx in data_span:
     # [7]
     npa = db.get_issue_ages(args['issue_type'], idx.strftime('%Y-%m-%d'))
     gd.issue_ages.append(npa.values.flatten())
+    #if npa.size > 0:
+    #    gd.issue_ages.append(npa.values.flatten())
+    #else:
+    #    gd.issue_ages.append(npa)
     i += 1
 
 # identify start and end array indices for requested plotting time span
