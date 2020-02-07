@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import calendar
 from sqlalchemy import create_engine
+from sqlalchemy.sql.expression import update
 from pandas.io.json import json_normalize
 from dateutil.relativedelta import relativedelta
 from pandas.tseries.offsets import MonthEnd, MonthBegin
@@ -57,8 +58,13 @@ class GithubIssuesUtils:
                 'first_page' : self.__first_page,
                 'page_count' : self.__page_count,
                 'offset_month' : self.__offset_month,
+                'save_file' : self.__save_file,
+                'label_file' : self.__label_file,
+                'out_label_file' : self.__out_label_file,
+                'num_labels' : self.__num_labels,
                 'info' : self.__info
                 }
+
 
     def __set_args(self, args : dict):
         for arg in args:
@@ -91,9 +97,17 @@ class GithubIssuesUtils:
                             help="which month to offset issue closure in (default=closed")
         arg_parser.add_argument('-p', '--datapath', type=str, default=os.getcwd(),
                             help="path for SQLite db file (default=pwd)")
+        arg_parser.add_argument('-s', '--savefile', type=str, nargs='?', action='store', const='metrics.png', default=None,
+                            help="save result to a file (optional file name, default = metrics.png)")
+        arg_parser.add_argument('-il', '--inlabfile', type=str, nargs='?', action='store', const='labels.csv', default=None,
+                            help="read issue labels & groups from a CSV file (optional file name, default = labels.csv")
+        arg_parser.add_argument('-ol', '--outlabfile', type=str, nargs='?', action='store', const='outlabels.csv', default=None,
+                            help="write issue labels & groups to a CSV file (optional file name, default = outlabels.csv")
+        arg_parser.add_argument('-nl', '--numlabs', type=int, default=12,
+                            help="set number of labels to display in the top N frequency analysis display (default = 12)")
         arg_parser.add_argument('-i', '--info', action='store_true',
                             help="write environment info to debug_info.txt file for Github bug reporting")
-        args = arg_parser.parse_args()
+        args = arg_parser.parse_args()        
         self.__auth_token = vars(args)['authtoken']
         self.__account = vars(args)['user']
         self.__repo = vars(args)['repo']
@@ -103,6 +117,10 @@ class GithubIssuesUtils:
         self.__first_page = vars(args)['firstpage']
         self.__page_count = vars(args)['pagecount']
         self.__offset_month = vars(args)['offsetmonth']
+        self.__save_file = vars(args)['savefile']
+        self.__label_file = vars(args)['inlabfile']
+        self.__out_label_file = vars(args)['outlabfile']
+        self.__num_labels = vars(args)['numlabs']
         self.__data_path = vars(args)['datapath']
         self.__info = vars(args)['info']
         return self.args
@@ -198,6 +216,7 @@ class GithubIssuesAPI:
 
     def __init__(self):
         self.__status        = 0
+        self.__labels_url    = None
         self.__next_page_url = None
         self.__response      = None
         self.__next_page     = 0
@@ -223,13 +242,20 @@ class GithubIssuesAPI:
     response = property(__get_response, __set_response)
 
 
-    def set_seed_url(self, args : dict):
+    def set_seed_url(self, args : dict, page_type='issues'):
+        
+        self.__last_page     = "[unknown]"
+        self.__status = 0
         
         account = (args['account'] if 'account' in args else self.__utils.args['account'])
         repo = (args['repo'] if 'repo' in args else self.__utils.args['repo'])
-        page = (args['first_page'] if 'first_page' in args else self.__utils.args['first_page'])
-
-        self.__next_page_url = f"https://api.github.com/repos/{account}/{repo}/issues?state=all&direction=asc&per_page=100&page={page}"
+        
+        if page_type == "issues":
+            page = (args['first_page'] if 'first_page' in args else self.__utils.args['first_page'])
+            self.__next_page_url = f"https://api.github.com/repos/{account}/{repo}/issues?state=all&direction=asc&per_page=100&page={page}"
+        elif page_type == "labels":
+            page = 1
+            self.__next_page_url = f"https://api.github.com/repos/{account}/{repo}/labels?page={page}"    
         self.__next_page = page
 
     
@@ -291,21 +317,24 @@ class GithubIssuesDB:
         self.repository_id = 0
         self.db_file = str(db_name) + ".db"
         self.db = db_name
-        self.allowable_tables = ['issues','status']
+        self.allowable_tables = { 'issues' : 'issues',
+                                  'labels' : 'issue_labels' }
         self.table = 'issues'
         self.status = 0
-        self.set_table(db_table)
+        self.__set_table(db_table)
 
 
     
-    def set_table(self, table_name):
-        if table_name in self.allowable_tables: 
+    def __set_table(self, table_name):
+        if table_name in list(self.allowable_tables.values()):
             self.table = table_name
             self.status = 0
         else:
             self.status = 1
             print(f"{self.stacktrace()} ERROR {self.status} '{table_name}' table is not supported.")
-            print(f"{self.stacktrace()} INFO supported tables = {self.allowable_tables}.")
+            print(f"{self.stacktrace()} WARN {self.status} current table ('{self.table}') remains unchanged.")
+            print(f"{self.stacktrace()} INFO supported tables = {list(self.allowable_tables.values())}.")
+            exit()
         return self.status
 
 
@@ -336,6 +365,7 @@ class GithubIssuesDB:
 
     
     def get_repo_name(self):
+        self.__set_table(self.allowable_tables['issues']) 
         try:
             sql = '''
                         SELECT repo_name FROM %s
@@ -352,7 +382,9 @@ class GithubIssuesDB:
             return 'unknown'
 
 
-    def drop_table(self):
+    def drop_table(self,type):
+        status = self.__set_table(self.allowable_tables[type])
+        print(f"{self.stacktrace()} INFO dropping '{self.table}' table...")
         try:
             sql = "DROP TABLE %s" % (self.table,)
             self.engine.execute(sql)
@@ -365,6 +397,7 @@ class GithubIssuesDB:
 
 
     def drop_db(self):
+        print(f"{self.stacktrace()} INFO deleting '{self.db_file}' database file...")
         if os.path.exists(self.db_file):
             try:
                 os.remove(self.db_file)
@@ -379,7 +412,8 @@ class GithubIssuesDB:
         return self.status
 
 
-    def create_table(self):
+    def create_table(self, type):
+        self.__set_table(self.allowable_tables[type]) 
         if self.table == 'issues':
             try:
                 sql = '''
@@ -406,6 +440,23 @@ class GithubIssuesDB:
                 self.status = 4
                 print(f"{self.stacktrace()} ERROR {self.status} unable to create '{self.table}' table.\n")
                 self.print_exception(e, 'SQL')
+        elif self.table == 'issue_labels':
+            try:
+                sql = '''
+                        CREATE TABLE issue_labels(id            INTEGER PRIMARY KEY,
+                                                  account       TEXT,
+                                                  repo_name     TEXT,
+                                                  label         TEXT,
+                                                  label_group   TEXT,
+                                                  description   TEXT)
+                        WITHOUT ROWID
+                '''
+                self.engine.execute(sql)
+                self.status = 0
+            except Exception as e:
+                self.status = 29
+                print(f"{self.stacktrace()} ERROR {self.status} unable to create '{self.table}' table.\n")
+                self.print_exception(e, 'SQL')
         else:
             self.status = 5
             print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table is not supported.")
@@ -413,6 +464,7 @@ class GithubIssuesDB:
 
 
     def issue_exists(self, issue_id):
+        self.__set_table(self.allowable_tables['issues']) 
         try:
             sql = '''
                         SELECT Count(*) FROM %s
@@ -430,7 +482,36 @@ class GithubIssuesDB:
             self.print_exception(e, 'SQL')
 
 
+    def insert_label(self, label):
+        self.__set_table(self.allowable_tables['labels']) 
+        df = json_normalize(label)
+
+        # rename a few JSON fields to match SQL table schema
+        df.rename(columns={'name' : 'label'}, inplace=True)
+
+        # the repository name can be found at the end of the 'repository_url' data item
+        [self.account] = re.findall("/([^/]+)/[^/]+/labels", df.at[0,"url"])
+        [self.repository_name] = re.findall("/([^/]+)/labels", df.at[0,"url"])
+
+        df['account'] = self.account
+        df['repo_name'] = self.repository_name
+        df['label_group'] = df['label']
+
+        # Define a subset of the full dataframe for direct SQL insertion 
+        record = df[['id', 'account', 'repo_name', 'label', 'label_group', 'description']]
+
+        try:
+            record.to_sql(self.table, con=self.engine, if_exists='append', index=False)    
+            self.status = 0
+        except Exception as e:
+            self.status = 30
+            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table insertion failure.")
+            self.print_exception(e, 'SQL')
+        return self.status
+
+
     def insert_issue(self, issue):
+        self.__set_table(self.allowable_tables['issues']) 
         df = json_normalize(issue)
 
         assignstring = []
@@ -443,7 +524,7 @@ class GithubIssuesDB:
         for label in df['labels'][0]:
             labelstring.append(str(label['name']))
         df['label_count'] = len(labelstring)
-        df['labelstring'] = ':'.join(labelstring)
+        df['labelstring'] = '::'.join(labelstring)
 
         # the repository name can be found at the end of the 'repository_url' data item
         [self.repository_name] = re.findall("/([^/]+)$", df.at[0,"repository_url"])
@@ -490,7 +571,59 @@ class GithubIssuesDB:
         return self.status
 
 
+    def get_labels(self):
+        self.__set_table(self.allowable_tables['labels'])
+        table = pd.DataFrame()
+        try:
+            # read all label records from db table
+            select_sql = "SELECT * FROM %s" % (self.table,)
+            table = pd.read_sql(select_sql, self.engine)
+            self.status = 0
+        except Exception as e:
+            self.status = 31
+            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' SQL retrieval failed.\n")
+            self.print_exception(e, 'SQL')
+        return table
+
+
+    def update_labels(self, df):
+        self.__set_table(self.allowable_tables['labels']) 
+        try:
+            table = self.get_labels()
+            # update label_group values from caller supplied mappings
+            for index, row in df.iterrows():
+                table.loc[table['label'] == row['label'], 'label_group'] = row['group']
+            # replace all (updated) label records in db
+            table.to_sql(self.table, self.engine, if_exists='replace', index=False)
+            self.status = 0
+        except Exception as e:
+            self.status = 31
+            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' SQL update failed.\n")
+            self.print_exception(e, 'SQL')
+        return self.status
+
+
+    def get_label_group(self, label):
+        self.__set_table(self.allowable_tables['labels']) 
+        try:
+            sql = '''
+                        SELECT label_group FROM %s
+                        WHERE account = ?
+                        AND repo_name = ?
+                        AND label = ?
+            ''' % (self.table,)
+            results = pd.read_sql(sql, self.engine, params=(self.account, self.repository_name, str(label)))
+            self.status = 0
+            return results.iloc[0][0]
+        except Exception as e:
+            self.status = 32
+            print(f"{self.stacktrace()} ERROR {self.status} issue label '{label}' does not exist.\n")
+            self.print_exception(e, 'SQL')
+            return "Unknown Type"
+
+
     def count_issues(self, issue_type, year, month):
+        self.__set_table(self.allowable_tables['issues']) 
         return_val_open   = 'unknown'
         return_val_closed = 'unknown'
         try:
@@ -527,8 +660,106 @@ class GithubIssuesDB:
         # print(f"{self.stacktrace()} INFO {month:02d}-{year:4d}: issues found OPEN={return_val_open}, CLOSED={return_val_closed}")
         return [return_val_open, return_val_closed]
     
-    
-    def count_labels(self, issue_type, year, month, label):
+    # count use of labels for issues opened prior to and which remain open at the stated point in time
+    def count_labels_point_in_time(self, issue_type, point_in_time):
+        self.__set_table(self.allowable_tables['issues']) 
+        open_labels = {}
+        try:
+            sql = '''
+                    SELECT labelstring FROM %s
+                    WHERE repo_id = ?
+                    AND type = ?
+                    AND date(opened_date) <= ?                                
+                    AND (closed_date is NULL OR date(closed_date) > ?)
+                    ORDER BY opened_date
+            ''' % (self.table,)
+            result = pd.read_sql(sql,
+                                 self.engine,
+                                 params=(self.repository_id, issue_type, point_in_time, point_in_time))
+            for index, row in result.iterrows():
+                for label in row[0].split('::'):
+                    if label != '':
+                        open_labels[label] = (1 if label not in open_labels else open_labels[label] + 1)
+            self.status = 0
+        except Exception as e:
+            self.status = 26
+            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            self.print_exception(e, 'SQL')
+        return pd.DataFrame.from_dict(open_labels, orient='index', columns=['open_count'])
+
+
+    def count_labels_monthly(self, issue_type, year, month):
+        self.__set_table(self.allowable_tables['issues']) 
+        opened_labels = {}
+        open_labels = {}
+        closed_labels = {}
+        # count issues opened during the month
+        try:
+            sql = '''
+                        SELECT labelstring FROM %s
+                        WHERE repo_id = ?
+                        AND type = ?
+                        AND opened_month = ?
+                        AND opened_year = ?
+            ''' % (self.table,)
+            result_opened = pd.read_sql(sql, self.engine, params=(self.repository_id, issue_type, month, year))
+            for index, row in result_opened.iterrows():
+                for label in row[0].split('::'):
+                    if label != '':
+                        opened_labels[label] = (1 if label not in opened_labels else opened_labels[label] + 1)
+            self.status = 0
+        except Exception as e:
+            self.status = 26
+            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            self.print_exception(e, 'SQL')
+        #count labels used for issues that were opened during the month and are currently still open
+        try:
+            sql = '''
+                        SELECT labelstring FROM %s
+                        WHERE repo_id = ?
+                        AND type = ?
+                        AND opened_month = ?
+                        AND opened_year = ?
+                        AND state = 'open'
+            ''' % (self.table,)
+            result_open = pd.read_sql(sql, self.engine, params=(self.repository_id, issue_type, month, year))
+            for index, row in result_open.iterrows():
+                for label in row[0].split('::'):
+                    if label != '':
+                        open_labels[label] = (1 if label not in open_labels else open_labels[label] + 1)
+            self.status = 0
+        except Exception as e:
+            self.status = 27
+            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            self.print_exception(e, 'SQL')
+        # count labels used for issues that were closed during the month
+        try:           
+            sql = '''
+                        SELECT labelstring FROM %s
+                        WHERE repo_id = ?
+                        AND type = ?
+                        AND closed_month = ?
+                        AND closed_year = ?
+            ''' % (self.table,)
+            result_closed = pd.read_sql(sql, self.engine, params=(self.repository_id, issue_type, month, year))
+            for index, row in result_closed.iterrows():
+                for label in row[0].split('::'):
+                    if label != '':
+                        closed_labels[label] = (1 if label not in closed_labels else closed_labels[label] + 1)
+            self.status = 0
+        except Exception as e:
+            self.status = 28
+            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            self.print_exception(e, 'SQL')
+
+        df_opened = pd.DataFrame.from_dict(opened_labels, orient='index', columns=['opened_count'])
+        df_open = pd.DataFrame.from_dict(open_labels, orient='index', columns=['open_count'])
+        df_closed = pd.DataFrame.from_dict(closed_labels, orient='index', columns=['closed_count'])
+
+        return pd.concat([df_opened, df_open, df_closed], axis=1, sort=True, join='outer').fillna(0)
+
+    def deprecated_count_labels(self, issue_type, year, month, label):
+        self.__set_table(self.allowable_tables['issues']) 
         return_val_open   = 'unknown'
         return_val_closed = 'unknown'
         try:
@@ -567,6 +798,7 @@ class GithubIssuesDB:
 
 
     def count_monthly_open(self, issue_type, year, month):
+        self.__set_table(self.allowable_tables['issues']) 
         try:
             sql = '''
                         SELECT Count(*) FROM %s
@@ -586,6 +818,7 @@ class GithubIssuesDB:
 
 
     def count_monthly_unlabelled(self, issue_type, year, month):
+        self.__set_table(self.allowable_tables['issues']) 
         try:
             sql = '''
                         SELECT Count(*) FROM %s
@@ -606,6 +839,7 @@ class GithubIssuesDB:
 
 
     def count_monthly_unassigned(self, issue_type, year, month):
+        self.__set_table(self.allowable_tables['issues']) 
         try:
             sql = '''
                         SELECT Count(*) FROM %s
@@ -626,6 +860,7 @@ class GithubIssuesDB:
 
 
     def count_labelled(self, issue_type, year, month):
+        self.__set_table(self.allowable_tables['issues']) 
         return_val_open   = 'unknown'
         return_val_closed = 'unknown'
         try:
@@ -685,6 +920,7 @@ class GithubIssuesDB:
 
 
     def get_month_range(self):
+        self.__set_table(self.allowable_tables['issues']) 
         try:
             sql = '''
                         SELECT MIN(opened_date), MAX(opened_date) FROM %s
@@ -706,6 +942,7 @@ class GithubIssuesDB:
             exit()
 
     def get_issue_ages(self, issue_type, month_end_date):
+        self.__set_table(self.allowable_tables['issues']) 
         try:
             sql = '''
                     SELECT opened_date FROM %s
@@ -720,7 +957,16 @@ class GithubIssuesDB:
                                  parse_dates={'opened_date': {'format': '%Y-%m-%d', 'utc': True}},
                                  params=(self.repository_id, issue_type, month_end_date, month_end_date))
             self.status = 0
+            
             month_end_date = pd.to_datetime(month_end_date, format='%Y-%m-%d', utc=True)
+            if result.empty:
+                month = calendar.month_abbr[month_end_date.month]
+                year = month_end_date.year
+                print(f"{self.stacktrace()} WARN no open {issue_type}s remained at month end for {month} {year}.")
+                print(f"{self.stacktrace()} WARN returning an empty dataframe.")
+                # create a minimal dataframe (required to keep box & violin plots happy)
+                result = pd.DataFrame([float('nan'), float('nan')])
+                return result
             return result.applymap(lambda x: (month_end_date - x).days)
         except Exception as e:
             self.status = 12
@@ -730,6 +976,7 @@ class GithubIssuesDB:
         
     
     def show_issues(self, issue_type):
+        self.__set_table(self.allowable_tables['issues']) 
         try:
             sql =   '''
                         SELECT  id, repo_name, type, state, opened_date, closed_date,
@@ -752,6 +999,7 @@ class GithubIssuesDB:
 
 
     def count_records(self, issue_type):
+        self.__set_table(self.allowable_tables['issues']) 
         try:
             sql = '''
                         SELECT Count(*) FROM %s
@@ -793,7 +1041,7 @@ class GithubIssuesData:
     def __init__(self):
         self.__status                  = 0
         self.__timespan_months         = 12
-        self.__utils                     = GithubIssuesUtils()
+        self.__utils                   = GithubIssuesUtils()
         self.__window_start_idx        = 0
         self.__window_end_idx          = self.__timespan_months
         self.init_arrays()
@@ -814,7 +1062,9 @@ class GithubIssuesData:
         self.__total_unlabelled_issue_counts = np.zeros(length, dtype=int)
         self.__total_unassigned_issue_counts = np.zeros(length, dtype=int)
         self.set_month_labels(date_range, True)
-        self.__issue_ages              = []
+        self.__labels = pd.DataFrame()
+        self.__groups = pd.DataFrame()
+        self.__issue_ages = []
         
 
     def set_plot_window(self, args : dict) -> list:
@@ -982,12 +1232,38 @@ class GithubIssuesData:
     total_unassigned_issue_counts = property(__get_total_unassigned_issue_counts, __set_total_unassigned_issue_counts)
 
 
+    def __get_labels(self) -> pd.DataFrame:
+        return self.__labels
+        
+    def __set_labels(self, labels: pd.DataFrame):
+        self.__labels = labels.copy()
+    
+    labels = property(__get_labels, __set_labels)
+
+
+    def __get_groups(self) -> pd.DataFrame:
+        return self.__groups
+        
+    def __set_groups(self, label_file: str):
+        self.__groups = pd.read_csv(label_file, names=['label','group']).drop_duplicates(subset=['label'], keep='first').dropna().reset_index()
+    
+    groups = property(__get_groups, __set_groups)
+
+
+    def group_labels(self, db):
+        # add a group classification column
+        self.__labels['label'] = self.__labels.index
+        self.__labels['group'] = self.__labels['label'].apply(lambda x: (db.get_label_group(x)))
+        # add an aggregated group count column
+        self.__labels['group_open_count'] = self.__labels['group'].apply(lambda x: self.__labels.groupby(['group'])['open_count'].sum().get(x))
+
+
     def __get_issue_ages(self) -> list:
         return self.__issue_ages
         
     def __set_issue_ages(self, ages: list):
         self.__issue_ages = ages.copy()
-    
+
     def issue_ages_append(self, ages: np.ndarray):
         self.__issue_ages.append(ages.copy())
 

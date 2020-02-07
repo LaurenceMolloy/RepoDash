@@ -13,6 +13,7 @@ import matplotlib.cm as cm
 from matplotlib.colors import to_rgba, ListedColormap
 import matplotlib.patches as mpatches
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+import mplcursors
 
 #################################################################
 ### ONLINE REFERENCES                                         ###
@@ -34,12 +35,41 @@ if args['info'] == True:
 # wipe and create an empty issues database table with every run
 # (future versions may implement incremental update capabilities)
 db = GithubIssuesDB(f'{gu.data_path}/issues', 'issues', echo=False)
-db.drop_table()
-db.create_table()
-
-# collect issues data via Gtihub API (JSON)
+# initialise object for interfacing with GtihubAPI
 ga = GithubIssuesAPI()
-ga.set_seed_url(args)
+# initialise data structures for plotting data
+gd = GithubIssuesData()
+
+
+db.drop_table('issues')
+db.create_table('issues')
+
+db.drop_table('labels')
+db.create_table('labels')
+
+
+# read in issue labels (multiple-pages)
+ga.set_seed_url(args, 'labels')
+for page in range(0, args['page_count']):
+    ga.get_next_page(args)
+    for issue in ga.response.json():
+        db.insert_label(issue)
+    # stop when we've reached last page of labels
+    if ga.status == 202:
+        break
+
+
+if args['label_file'] is not None:
+    gd.groups = args['label_file']
+    #pd.read_csv(args['label_file'], names=['label','group']).drop_duplicates(subset=['label'], keep='first').dropna().reset_index()
+    db.update_labels(gd.groups)
+
+if args['out_label_file'] is not None:
+    db.get_labels().to_csv(args['out_label_file'], columns=['label', 'label_group'], encoding='utf-8', index=False)
+    exit()
+
+# read in issues list (multiple-pages)
+ga.set_seed_url(args, 'issues')
 for page in range(0, args['page_count']):
     ga.get_next_page(args)
     for issue in ga.response.json():
@@ -53,10 +83,10 @@ if db.count_records(f"{args['issue_type']}") == 0:
     print (f"ERROR: no {args['issue_type']}s found")
     exit()
 
-# initialise numpy arrays for plotting data
-gd = GithubIssuesData()
+
 data_span = db.monthly_span
 gd.init_arrays(data_span)
+
 
 # populate numpy data arrays for plotting
 # ([1] opened, [2] closed, [3] open & unlabelled [4] open & unassigned [5] open [6] total open & [7] ages)
@@ -68,6 +98,7 @@ for idx in data_span:
      gd.closed_issue_counts[i]] = db.count_issues(args['issue_type'],
                                                   idx.year,
                                                   idx.month)
+        
     # [3]
     gd.unlabelled_issue_counts[i] = db.count_monthly_unlabelled(args['issue_type'],
                                                                 idx.year,
@@ -98,13 +129,15 @@ for idx in data_span:
     gd.issue_ages.append(npa.values.flatten())
     i += 1
 
+gd.labels = gd.labels.add(db.count_labels_point_in_time(args['issue_type'],data_span[-1].strftime('%Y-%m-%d')), fill_value=0)
+
 # identify start and end array indices for requested plotting time span
 [w_start, w_end] = gd.set_plot_window(args)
 w_start -= 1 # we want 1 month prior as well
 w_end += 1   # account for open ended ranges
 
 # optional debug functions
-# db.show_issues(f"{args['issue_type']}")
+#db.show_issues(f"{args['issue_type']}")
 # db.show_statistics(gd.plot_window)
 
 # calculate monthly mix of opened/closed issues
@@ -138,10 +171,98 @@ bar_spacing = 0.05
 
 # figure settings
 #plt.style.use('seaborn-whitegrid')
-fig, ax = plt.subplots(3, 1, figsize=(15, 10), constrained_layout=False)
-plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=0.15)
+fig, ax = plt.subplots(3, 3, figsize=(15, 10), constrained_layout=False)
+
+plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.25, hspace=0.15)
 title = f"Analysis of {db.get_repo_name()} Github {args['issue_type']}s for period {gd.month_labels[w_start+1]} to {gd.month_labels[w_end-1]}"
 fig.suptitle(title, fontsize=16)
+
+
+###########################################################
+### LABELS SUBPLOT - count of open issue types (groups) ###
+###########################################################
+
+def plot_label_counts(gd , db, ax=None, **kwargs):
+    
+    # provide default axis if axis is not specified
+    if ax is None:
+        ax = plt.gca()
+    
+    # process configuration values, setting to default values where silent
+    bar_config = {'ec': 'w', 'lw': 1, **kwargs.get('bar_config', {})}
+    highlight_config = {'ec': 'r', 'fc': '#00FF00', **kwargs.get('highlight_config', {})}
+    
+    # process other keyword arguments
+    top = kwargs.get('top', 12)
+    level = kwargs.get('level', 'group')
+    cmap = kwargs.get('cmap', 'plasma')
+
+    gd.group_labels(db)
+    gd.labels.sort_values(by=['group_open_count','open_count'], inplace=True, ascending=False )
+    group_open_count = gd.labels.groupby(['group'],sort=False)['open_count'].sum()
+    max_label_count = int(gd.labels['open_count'].max())
+    max_group_count = int(gd.labels['group_open_count'].max())
+    colors = plt.cm.get_cmap(cmap)(np.linspace(0,1,max_label_count+1))
+
+    # reduce count of items displayed if labels < top
+    top = min(group_open_count.size, top)
+
+    iter = 0
+    for name,group in gd.labels.filter(items=['label','group','open_count']).groupby([level], sort=False):
+        iter += 1
+        i=0
+        l=0
+        for index, row in group.iterrows():
+            
+            c = (0 if max_label_count == 0 else int(row['open_count'])/max_label_count)
+            ax.bar(name, int(row['open_count']), bottom=l, color=colors[int(row['open_count'])], edgecolor=bar_config['ec'], linewidth=bar_config['lw'],
+                     label=f"{row['label']}: {int(row['open_count'])}")
+            l += row['open_count']
+            i += 1
+        if iter == top:
+            break
+
+    # account for sensible default plot scales empty open label sets
+    ymax = max(4,max_group_count)
+    ax.set_ylim([0,ymax])
+    ax.locator_params(axis='y', nbins=4)
+    
+    ax.set_xticks(np.arange(top))   # len(group_open_count)))
+    ax.set_xticklabels(group_open_count.index[0:top], rotation=90)
+    if level == 'group':
+        ax.set_ylabel(f"Label Counts for Open Issues (Top {top}, grouped)", labelpad=10)
+    else:
+        ax.set_ylabel(f"Label Counts for Open Issues (Top {top})", labelpad=10)
+        
+    
+    cursor = mplcursors.cursor(hover=True)
+
+    @cursor.connect("add")
+    def on_add(sel):
+        x, y, width, height = sel.artist[sel.target.index].get_bbox().bounds
+        sel.annotation.set(text=sel.artist.get_label(), size=14, position=((top-1+(bar_config['lw']/2))*0.95, ymax*0.95)) # len(group_open_count)
+        sel.annotation.xy = (x + width, y + height)
+        sel.annotation.set_horizontalalignment('right')
+        sel.annotation.set_verticalalignment('top')
+        sel.artist[sel.target.index].set_edgecolor(highlight_config['ec'])
+        sel.artist[sel.target.index].set_linewidth(5)
+        sel.artist[sel.target.index].set_facecolor(highlight_config['fc'])
+
+    @cursor.connect("remove")
+    def on_remove(sel):
+        x, y, width, height = sel.artist[sel.target.index].get_bbox().bounds
+        sel.artist[sel.target.index].set_edgecolor(bar_config['ec'])
+        sel.artist[sel.target.index].set_linewidth(bar_config['lw'])
+        sel.artist[sel.target.index].set_facecolor(colors[int(height)])
+        for sel in cursor.selections:
+            sel.artist[sel.target.index].set_edgecolor(highlight_config['ec'])
+            sel.artist[sel.target.index].set_linewidth(5)
+            sel.artist[sel.target.index].set_facecolor(highlight_config['fc'])
+
+# calling code for topmost metrics dashboard (monthly counts)
+ax_lab = plt.subplot(3,3,(1,4))
+plot_label_counts(gd, db, ax=ax_lab, top=args['num_labels'])
+
 
 #######################################################################
 ### TOP SUBPLOT - count of issues opened or closed during the month ###
@@ -308,7 +429,7 @@ def plot_monthly_counts(opened_counts, closed_counts , ax=None, **kwargs):
 
 
 # calling code for topmost metrics dashboard (monthly counts)
-ax_top = plt.subplot(3,1,1)
+ax_top = plt.subplot(3,3,(2,3))
 plot_monthly_counts(gd.opened_issue_counts, gd.closed_issue_counts, start_idx=w_start, end_idx=w_end, ax=ax_top,
                     open_counts=gd.open_issue_counts,
                     unlabelled_counts=gd.unlabelled_issue_counts,
@@ -317,7 +438,7 @@ plot_monthly_counts(gd.opened_issue_counts, gd.closed_issue_counts, start_idx=w_
 ###########################################################################
 ### MIDDLE SUBPLOT - total issues open at the start & end of each month ###
 ###########################################################################
-plt.subplot(3,1,2)
+plt.subplot(3,3,(5,6))
 
 total_open = gd.total_open_issue_counts[w_start:w_end]
 total_unlabelled = gd.total_unlabelled_issue_counts[w_start:w_end]
@@ -340,8 +461,8 @@ ax_mid_l.yaxis.set_label_position("left")
 ax_mid_r.yaxis.tick_right()
 ax_mid_r.yaxis.set_label_position("right")
 
-ax_mid_l.set_ylabel(f"Total Open {args['issue_type']}s", labelpad=10)
-ax_mid_r.set_ylabel(f"Total Open {args['issue_type']}s Requiring Triage", labelpad=10)
+ax_mid_l.set_ylabel(f"Total Open {args['issue_type']}s")
+ax_mid_r.set_ylabel(f"Total Open {args['issue_type']}s Requiring Triage")
 
 bbox_props = dict(boxstyle="round,pad=0.2", fc=(1,1,0.9), ec="k", lw=1.5)
 
@@ -432,24 +553,25 @@ ax_mid_r.legend(handles=[light_red_patch],
                 ncol=1, borderaxespad=0)
 
 ### create a color map bar to display on the right side of the plot
-cbar_ax = inset_axes(ax[1],
+cbar_ax = inset_axes(ax[1][2],
                      width="2%",     # width  = 2% of parent_bbox width
                      height="100%",  # height = 100% of parent_bbox height
                      loc='lower left',
-                     bbox_to_anchor=(1.06, 0, 1, 1),
-                     bbox_transform=ax[1].transAxes,
+                     bbox_to_anchor=(1.2, 0, 1, 1),
+                     bbox_transform=ax[1][2].transAxes,
                      borderpad=0)
 
 data = np.random.randn(1, 1) # dummy 2D array (allows me to create the pcolormesh below)
-psm = ax[1].pcolormesh(data, cmap=combined_cmap, rasterized=True, vmin=-100, vmax=100)
-cbar = fig.colorbar(psm, ax=ax[1], cax=cbar_ax)
+psm = ax[1][2].pcolormesh(data, cmap=combined_cmap, rasterized=True, vmin=-100, vmax=100)
+cbar = fig.colorbar(psm, ax=ax[1][2], cax=cbar_ax)
 cbar.ax.get_yaxis().set_ticks([])
-cbar.ax.set_ylabel(f"<--more closed      more opened-->\nmix of {args['issue_type']} activity", rotation=90)
+cbar.ax.set_ylabel(f"<--more closed      more opened-->\nmix of {args['issue_type']} activity", labelpad=5, rotation=90)
 
 #################################################################################
 ### BOTTOM SUBPLOT - age distribution of open issues at the end of each month ###
 #################################################################################
-plt.subplot(3,1,3)
+plt.subplot(3,3,(8,9))
+
 
 def adjacent_values(vals, q1, q3):
     upper_adjacent_value = q3 + (q3 - q1) * 1.5
@@ -482,6 +604,7 @@ for i in range(1,len(ages)):
 
 parts = plt.violinplot(ages[1:], positions=positions[1:],
                        showmeans=False, showmedians=False, showextrema=False)
+
 
 for pc in parts['bodies']:
     pc.set_facecolor('#D43F3A')
@@ -518,10 +641,22 @@ plt.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=
 above_patch  = mpatches.Patch(color='#EEAAAA', label='above target (bad)')
 target_patch = mpatches.Patch(color='#EEEEAA', label='target age range')
 below_patch  = mpatches.Patch(color='#AAEEAA', label='below target (good)')
+
 plt.legend(handles=[above_patch, target_patch, below_patch],
            bbox_to_anchor=(0, 1.02, 1, .102),
            loc='lower right',
            ncol=3,
            borderaxespad=0)
 
-plt.show()
+# hide final panel (bottom left)
+plt.subplot(3,3,7).axis('off')
+
+
+
+if args['save_file'] is None:
+    plt.show()
+else:
+    print(f"{gu.stacktrace()} INFO writing metrics image to file ({args['save_file']}).") 
+    plt.savefig(args['save_file'])
+    
+
