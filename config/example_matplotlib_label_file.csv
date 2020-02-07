@@ -1,0 +1,97 @@
+label,label_group
+Documentation,Documentation
+New feature,Feature Request
+mplot3d,Projections/Tools/Extensions
+Confirmed bug,Bug
+Needs confirmation,Input Required
+OS/Microsoft,OS
+OS/Apple,OS
+Release critical,Release Critical
+Upstream fix required,External Dependency
+Needs clarification,Input Required
+MEP needed,Input Required
+Won't or can't fix,Rejected
+text,Text & Annotation
+MEP22,MEP
+mpl_toolkit,Projections/Tools/Extensions
+geometry manager,Geometry Manager
+API consistency,API
+Default changes,API
+Needs patch,Input Required
+Needs revision,Input Required
+Needs review,Input Required
+Not a blocker,Miscellaneous
+API Changes,API
+widgets/UI,GUI
+MEP13,MEP
+MEP15,MEP
+MEP14,MEP
+rcparams,API
+Build,Miscellaneous
+text/unicode,Text & Annotation
+hackathon,Project Assignment
+GUI/Qt,GUI
+GUI/wx,GUI
+GUI/gtk,GUI
+GUI/osx,GUI
+GUI/tk,GUI
+third-party integration,Integration
+Testing,Testing
+backend/pgf,Backend
+MEP25,MEP
+color/alpha,Color
+backend/agg,Backend
+sphinx extension,Projections/Tools/Extensions
+Date handling,Miscellaneous
+Animation,Miscellaneous
+Path handling,Miscellaneous
+backend/ps,Backend
+backend/pdf,Backend
+backend/svg,Backend
+units,Text & Annotation
+Duplicate,Duplicate
+GUI/nbagg,GUI
+GUI/webagg,GUI
+backend/cairo,Backend
+Difficulty: Easy,Difficulty Rated
+Difficulty: Medium,Difficulty Rated
+Difficulty: Hard,Difficulty Rated
+Py3k,Python Versions
+MEP12,MEP
+MEP27,MEP
+polar,Projections/Tools/Extensions
+MEP26,MEP
+categorical,Miscellaneous
+Still Needs Manual Backport,PR Related
+Good first issue,Difficulty Rated
+text/usetex,Text & Annotation
+Needs rebase,Input Required
+Py 2/3 compat,Python Versions
+pyplot API,API
+Needs tests,Testing
+Argument Checking,API
+Work in progress,In Progress
+Performance,Performance
+ticks and axis,Text & Annotation
+Py2-only,Python Versions
+Community support,Community
+Waiting for other PR,PR Related
+colorbar,Color
+color and colormaps,Color
+stale,Rejected
+toolbar,Projections/Tools/Extensions
+Downstream fix required,External Dependency
+jupyter integration,Integration
+Images,Images
+text/fonts,Text & Annotation
+text/mathtext,Text & Annotation
+student project,Project Assignment
+Needs comment/discussion,Input Required
+legend,Text & Annotation
+Merge with single review?,PR Related
+maintenance,Miscellaneous
+Sprint,Project Assignment
+Needs documentation,Documentation
+transforms and scales,Miscellaneous
+has PR,PR Related
+accessibility,Miscellaneous

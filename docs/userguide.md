@@ -20,6 +20,9 @@ installation, and some of which may require installation:
 - sqlalchemy
 - dateutil
 - matplotlib
+- mpl_toolkits
+- mplcursors
+- subprocess, platform, struct, locale (for bug reporting)
 - pytest, pytest-flake8, pytest-mypy (for unit testing)
 
 Future plans include an install script that ensures the supported version of python and all required modules are 
@@ -67,17 +70,33 @@ issue metrics. The available command line options are as follows:
 <tr><th>-c, --pagecount</th>     <th>number of pages of issues to request</th>    <th>(default: 10)</th></tr>
 <tr><th>-o, --offsetmonth</th>   <th>which month to offset issue closure in ('opened', 'closed')</th>  <th>(default: closed)</th></tr>
 <tr><th>-s, --savefile</th>      <th>save dashboard image to a file</th>          <th>(default: ./metrics.png)</th></tr>
+<tr><th>-il, --inlabfile</th>    <th>labels/groups mapping file (CSV)</th>        <th>(default: ./label.csv)</th></tr>
+<tr><th>-ol, --outlabfile</th>   <th>file to write labels/groups out to (CSV)</th><th>(default: ./outlabel.csv)</th></tr>
+<tr><th>-nl, --numlabs</th>      <th>number of labels to plot in the top N label count display</th><th>(default: 12)</th></tr>
 <tr><th>-p, --datapath</th>      <th>location of SQLite database</th>             <th>(default: REPODASH_PATH/data)</th></tr>
 <tr><th>-i, --info</th>          <th>write environment info for debugging</th>    <th>writes a debug_info.txt file</th></tr>
 <tr><th>-h, --help</th>          <th>print options/help text</th>                 <th></th></tr>
 </table>
 </p>
 
-<h3>Important Notes</h3>
+<h3>Notes</h3>
+
+**Database Interaction:** The current version of RepoDash wipes and re-generates the database with every run. 
+An update mode of operation is planned in the future. This will allow you to focus only on changes and additions since 
+the previous run, reducing the number of API calls required.
 
 **Output:** By default, RepoDash renders the output as an image in a window on the desktop. You can override this and 
 save the image to a file for sharing by email or inclusion in a report by using the **-s** argument. When used without 
-specifying a filename, it defaults to saving to a file called _**metrics.png**_ in the current folder.
+specifying a filename, it defaults to saving to a file called _**metrics.png**_ in the current folder. There is no 
+interactive functionality when saving the image to a file.
+
+**Grouping Issue Labels:** By default, RepoDash will display the frequency of the top 12 labels used for all issues that 
+remained open at the end date of the time period of interest. To do this, it first has to read in the full list of issue
+labels via the Github API. You can save this list to a CSV file using the **-ol** (output label file) argument. It is 
+sometimes desirable to be able to organise the project's issue labels into groups (for instance, grouping all labels that 
+refer to an aspect of a project's API). This can be done by manually editing the saved CSV file to associate multiple 
+'label' values (first column) with a common label_group value (second column) and then supplying this edited file to the 
+program using the **-il** (input label file) argument.
 
 **Authentication:** You can run RepoDash against any public Github repository without authentication. 
 This limits you to 60 Github API web requests per hour. If you have a Github account you can request a 
@@ -89,16 +108,14 @@ to 5000 per hour.
 outside the date range of the issues data collected, RepoDash will do its best to adjust the dates and/or 
 shorten the plotting timespan so that it maps as closely as possible to the data available.
 
-**Database Interaction:** The current version of RepoDash wipes and re-generates the database with every run. 
-An update mode of operation is planned for in the near future. This will allow you to focus only on changes 
-and additions since the previous run, reducing the number of API calls required.
-
 <h3>Example Usage</h3>
 
 **EXAMPLE 1: Numpy Issues** 
 
-Process the first 6 pages of the issues list from the Numpy repository and plot _**issue**_ metrics for the period June 2012 
-to September 2012 inclusive (4 months).
+Process the first 6 pages of the issues list from the Numpy repository and plot _**issue**_ and _**label**_ metrics for the 
+period June 2012 to September 2012 inclusive (4 months). You may notice that there are labels with a count of zero in the 
+label count display. These are labels that were attached to issues that were both opened and closed during the period June 
+2012 - September 2012.
 
     python3 RepoDash.py -u numpy -r numpy -m 4 -d '2012-09' -c 6
 
@@ -107,8 +124,8 @@ to September 2012 inclusive (4 months).
 
 **EXAMPLE 2: Numpy PRs** 
 
-Process the first 6 pages of the issues list from the Numpy repository and plot _**pull-request**_ metrics for the period June 
-2012 to September 2012 inclusive (4 months).
+Process the first 6 pages of the issues list from the Numpy repository and plot _**pull-request**_ and _**label**_ metrics 
+for the period June 2012 to September 2012 inclusive (4 months).
 
     python3 RepoDash.py -u numpy -r numpy -m 4 -d '2012-09' -c 6 -t pr
 
@@ -118,9 +135,9 @@ Process the first 6 pages of the issues list from the Numpy repository and plot 
 **EXAMPLE3: Pandas Issues (with issue closure offset in the month in which it was closed)** 
 
 Process pages 200 to 249 (50 pages) of the issues list from the Pandas repository and plot the last 6 months of issue 
-metrics.
+metrics and the top 20 labels used.
 
-    python3 RepoDash.py -u pandas-dev -r pandas -m 6 -f 200 -c 50
+    python3 RepoDash.py -u pandas-dev -r pandas -m 6 -f 200 -c 50 -nl 20
 
 ![Screenshot](images/RepoDash_UserGuide_Ex3_Pandas_issue.png)
 
@@ -132,3 +149,12 @@ processed, so RepoDash maps the plotting timeframe to the last 6 calendar months
 - RepoDash has no knowledge of any issues that were opened or closed prior to the earliest issues processed. For simplicity, it
 presumes an empty issues list prior to this point. The Total Open Issues count is therefore relative to a zero count at the start
 of the processed data timespan (February 2018 in this example).
+
+**EXAMPLE4: Matplotlib Issues with _grouped_ label counts **
+
+Process pages 100 to 139 (40 pages) of the issues list from the Matplotlib repository and plot the last 12 months of issue 
+metrics and label counts, grouped according to a label grouping file (supplied using the **-il** argument).
+
+    python3 RepoDash.py -u matplotlib -r matplotlib -m 12 -f 100 -c 40 -il ../config/example_matplotlib_label_file.csv
+
+![Screenshot](images/RepoDash_UserGuide_Ex4_Matplotlib_issue_grouped_labels.png)

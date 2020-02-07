@@ -29,6 +29,9 @@ metrics:</p>
 </ul>
 </p> 
 
+<p>It also displays aggregate counts for the most frequently used labels for all issues that remained open
+at the end of the displayed time period.</p>
+
 <h3>Typical Use Cases</h3>
 
 <p>Perhaps you are managing an open source project, the maintenance of which you'd like to keep on top 
