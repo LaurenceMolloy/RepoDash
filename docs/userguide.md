@@ -150,7 +150,7 @@ processed, so RepoDash maps the plotting timeframe to the last 6 calendar months
 presumes an empty issues list prior to this point. The Total Open Issues count is therefore relative to a zero count at the start
 of the processed data timespan (February 2018 in this example).
 
-**EXAMPLE4: Matplotlib Issues with _grouped_ label counts **
+**EXAMPLE4: Matplotlib Issues with _grouped_ label counts**
 
 Process pages 100 to 139 (40 pages) of the issues list from the Matplotlib repository and plot the last 12 months of issue 
 metrics and label counts, grouped according to a label grouping file (supplied using the **-il** argument).
