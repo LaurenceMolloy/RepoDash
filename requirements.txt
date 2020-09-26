@@ -1,0 +1,7 @@
+requests
+pandas
+numpy
+sqlalchemy
+dateutil
+matplotlib
+mplcursors
