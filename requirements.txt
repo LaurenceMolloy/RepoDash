@@ -2,6 +2,6 @@ requests
 pandas
 numpy
 sqlalchemy
-dateutil
+py-dateutil
 matplotlib
 mplcursors
