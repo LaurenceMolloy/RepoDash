@@ -67,6 +67,8 @@ issue metrics. The available command line options are as follows:
 <p>
 <table>
 <tr><th>-a, --authtoken</th>     <th>Github Personal Access Token</th>            <th>(default: '')</th></tr>
+<tr><th>-fqdn</th>         <th>Fully qualified domain name for github server</th> <th>(default: 'api.github.com')</th></tr>
+<tr><th>-https</th>              <th>Use HTTPS</th>                               <th>(default: False)</th></tr>
 <tr><th>-u, --user</th>          <th>Github username or account</th>              <th>(default: 'matplotlib')</th></tr>
 <tr><th>-r, --repo</th>          <th>Github repository name</th>                  <th>(default: 'matplotlib')</th></tr>
 <tr><th>-t, --type</th>          <th>Issue type ('issue', 'pull_request')</th>    <th>(default: 'issue')</th></tr>

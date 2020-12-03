@@ -443,7 +443,6 @@ plt.subplot(3,3,(5,6))
 total_open = gd.total_open_issue_counts[w_start:w_end]
 total_unlabelled = gd.total_unlabelled_issue_counts[w_start:w_end]
 
-
 y_range = max(total_open.max() - total_open.min(), total_unlabelled.max() - total_unlabelled.min())
 # y_range = total_open.max() - total_open.min()
 y_padding = math.ceil(y_range * 0.1) 
@@ -553,17 +552,17 @@ ax_mid_r.legend(handles=[light_red_patch],
                 ncol=1, borderaxespad=0)
 
 ### create a color map bar to display on the right side of the plot
-cbar_ax = inset_axes(ax[1][2],
+cbar_ax = inset_axes(ax_mid,
                      width="2%",     # width  = 2% of parent_bbox width
                      height="100%",  # height = 100% of parent_bbox height
                      loc='lower left',
-                     bbox_to_anchor=(1.2, 0, 1, 1),
-                     bbox_transform=ax[1][2].transAxes,
+                     bbox_to_anchor=(1.1, 0, 1, 1),
+                     bbox_transform=ax_mid.transAxes,
                      borderpad=0)
 
 data = np.random.randn(1, 1) # dummy 2D array (allows me to create the pcolormesh below)
-psm = ax[1][2].pcolormesh(data, cmap=combined_cmap, rasterized=True, vmin=-100, vmax=100)
-cbar = fig.colorbar(psm, ax=ax[1][2], cax=cbar_ax)
+psm = ax_mid.pcolormesh(data, cmap=combined_cmap, rasterized=True, vmin=-100, vmax=100)
+cbar = fig.colorbar(psm, ax=ax_mid, cax=cbar_ax)
 cbar.ax.get_yaxis().set_ticks([])
 cbar.ax.set_ylabel(f"<--more closed      more opened-->\nmix of {args['issue_type']} activity", labelpad=5, rotation=90)
 

@@ -6,9 +6,10 @@ import requests
 import pandas as pd
 import numpy as np
 import calendar
+from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.sql.expression import update
-from pandas.io.json import json_normalize
+from pandas import json_normalize
 from dateutil.relativedelta import relativedelta
 from pandas.tseries.offsets import MonthEnd, MonthBegin
 
@@ -49,20 +50,22 @@ class GithubIssuesUtils:
 
 
     def __get_args(self) -> dict:
-        return {'auth_token' : self.__auth_token,
-                'account' : self.__account,
-                'repo' : self.__repo,
-                'issue_type' : self.__issue_type,
-                'timespan' : self.__timespan,
-                'ref_date' : self.__ref_date,
-                'first_page' : self.__first_page,
-                'page_count' : self.__page_count,
-                'offset_month' : self.__offset_month,
-                'save_file' : self.__save_file,
-                'label_file' : self.__label_file,
+        return {'auth_token'     : self.__auth_token,
+                'fqdn'           : self.__fqdn,
+                'https'          : self.__https,
+                'account'        : self.__account,
+                'repo'           : self.__repo,
+                'issue_type'     : self.__issue_type,
+                'timespan'       : self.__timespan,
+                'ref_date'       : self.__ref_date,
+                'first_page'     : self.__first_page,
+                'page_count'     : self.__page_count,
+                'offset_month'   : self.__offset_month,
+                'save_file'      : self.__save_file,
+                'label_file'     : self.__label_file,
                 'out_label_file' : self.__out_label_file,
-                'num_labels' : self.__num_labels,
-                'info' : self.__info
+                'num_labels'     : self.__num_labels,
+                'info'           : self.__info
                 }
 
 
@@ -79,6 +82,10 @@ class GithubIssuesUtils:
         arg_parser = argparse.ArgumentParser()
         arg_parser.add_argument('-a', '--authtoken', type=str, default='',
                             help="Github personal access token (default='')")
+        arg_parser.add_argument('-fqdn', '--fqdn', type=str, default='api.github.com',
+                            help="fully qualified domain name of github server (default='api.github.com')")
+        arg_parser.add_argument('-https', '--https', action='store_true',
+                            help="use https")        
         arg_parser.add_argument('-u', '--user', type=str, default='matplotlib',
                             help="Github user name (default='matplotlib')")
         arg_parser.add_argument('-r', '--repo', type=str, default='matplotlib',
@@ -87,7 +94,7 @@ class GithubIssuesUtils:
                             help="Issue type, one of ['issue','pr'] (default='issue')")
         arg_parser.add_argument('-m', '--months', type=int, default=12,
                             help="analysis timespan in months (default=12)")
-        arg_parser.add_argument('-d', '--refdate', type=pd.Timestamp, default=pd.datetime.now(),
+        arg_parser.add_argument('-d', '--refdate', type=pd.Timestamp, default=datetime.now(),
                             help="reference date ('YYYY-MM', default=now)")
         arg_parser.add_argument('-f', '--firstpage', type=int, default=1,
                             help="first page of issues to request (default=1)")
@@ -109,6 +116,8 @@ class GithubIssuesUtils:
                             help="write environment info to debug_info.txt file for Github bug reporting")
         args = arg_parser.parse_args()        
         self.__auth_token = vars(args)['authtoken']
+        self.__fqdn = vars(args)['fqdn']
+        self.__https = vars(args)['https']
         self.__account = vars(args)['user']
         self.__repo = vars(args)['repo']
         self.__issue_type = vars(args)['type']
@@ -247,15 +256,20 @@ class GithubIssuesAPI:
         self.__last_page     = "[unknown]"
         self.__status = 0
         
+        endpoint_url = (args['fqdn'] if 'fqdn' in args else self.__utils.args['fqdn'])
+        if endpoint_url != "api.github.com":
+            endpoint_url += "/api/v3"
+        use_https = (args['https'] if 'https' in args else self.__utils.args['https'])
+        protocol = ('https' if use_https else 'http')
         account = (args['account'] if 'account' in args else self.__utils.args['account'])
         repo = (args['repo'] if 'repo' in args else self.__utils.args['repo'])
         
         if page_type == "issues":
             page = (args['first_page'] if 'first_page' in args else self.__utils.args['first_page'])
-            self.__next_page_url = f"https://api.github.com/repos/{account}/{repo}/issues?state=all&direction=asc&per_page=100&page={page}"
+            self.__next_page_url = f"{protocol}://{endpoint_url}/repos/{account}/{repo}/issues?state=all&direction=asc&per_page=100&page={page}"
         elif page_type == "labels":
             page = 1
-            self.__next_page_url = f"https://api.github.com/repos/{account}/{repo}/labels?page={page}"    
+            self.__next_page_url = f"{protocol}://{endpoint_url}/repos/{account}/{repo}/labels?page={page}"
         self.__next_page = page
 
     
@@ -267,8 +281,26 @@ class GithubIssuesAPI:
         print(f"{self.__utils.stacktrace()} INFO processing page {self.__next_page} of {self.__last_page} pages...")
         
         headers = ({"Authorization": f"token {args['auth_token']}"} if args['auth_token'] != '' else {})
-        self.__response = requests.get(url = self.__next_page_url, headers = headers)
-        
+
+        try:
+            self.__response = requests.get(url = self.__next_page_url, headers = headers, timeout=3)
+            self.__response.raise_for_status()
+        except requests.exceptions.HTTPError:
+            print (f"{self.__utils.stacktrace()} ERROR HTTP {self.__response.status_code} response code for {self.__next_page_url}")
+            raise SystemExit()
+        except requests.exceptions.ConnectionError:
+            print (f"{self.__utils.stacktrace()} ERROR Connection error for {self.__next_page_url}")
+            raise SystemExit()
+        except requests.exceptions.Timeout:
+            print(f"{self.__utils.stacktrace()} ERROR Timeout for {self.__next_page_url}")
+            raise SystemExit()
+        except requests.exceptions.TooManyRedirects:
+            print(f"{self.__utils.stacktrace()} ERROR Too many redirects for {self.__next_page_url}")
+            raise SystemExit()
+        except requests.exceptions.RequestException:
+            print(f"{self.__utils.stacktrace()} ERROR General request exception for {self.__next_page_url}")
+            raise SystemExit()
+            
         print(f"{self.__utils.stacktrace()} INFO remaining API call allowance = {self.__get_remaining_calls()}.")
 
         # check for valid response
