@@ -304,7 +304,7 @@ class GithubIssuesAPI:
         print(f"{self.__utils.stacktrace()} INFO remaining API call allowance = {self.__get_remaining_calls()}.")
 
         # check for valid response
-        if not self.__response.headers['Status'].startswith("200 "):
+        if not self.__response.ok:
             self.__status = 201
             self.__process_response_error()
             exit()
