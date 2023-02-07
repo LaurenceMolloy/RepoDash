@@ -132,17 +132,29 @@ class GithubIssuesUtils:
         self.__num_labels = vars(args)['numlabs']
         self.__data_path = vars(args)['datapath']
         self.__info = vars(args)['info']
+        # if -i/--info arg is supplied, write debug info out to a file and quit 
+        if self.__info == True:
+            self.write_debug_info()
+            exit()
         return self.args
 
 
     def write_debug_info(self):
         """
-        Writes system, python, module & commit information to a debug_info.txt file
+    Class: GithubIssuesUtils
+    Method: write_debug_info()
+    Argument(s): None
+    Return Value(s): None
+    Output(s): a file (debug_info.txt)
+    Interrogates and writes system, python, module & commit information to a file. 
+    When reporting RepoDash bugs, run this function to obtain a detailed report 
+    that you should provide to the library maintainer when submitting your github 
+    issue. Please run this from within the top level folder for your cloned repo.
         """
         debug_info = []
 
         # get short commit hash
-        commit = None
+        commit = "unknown - please run this from within the top level folder for the repo"
         if os.path.isdir(".git"):
             try:
                 pipe = subprocess.Popen(
@@ -161,9 +173,21 @@ class GithubIssuesUtils:
 
         try:
             (sysname, nodename, release, version, machine, processor) = platform.uname()
+
+            # local timezone discovery only tested for Windows & Linux
+            # if system is neither, then leave as "unknown"
+            if sysname == 'Windows': 
+                local_tz = subprocess.check_output(["tzutil", "/g"], shell=True)
+                local_tz = local_tz.decode('utf-8').strip().strip('"')
+            elif sysname == "Linux": 
+                local_tz = subprocess.check_output(["date", "+%Z"])
+                local_tz = local_tz.decode('utf-8').strip().strip('"')
+            else:
+                local_tz = "unknown"
+
             debug_info.extend(
                 [
-                    ('local timezone', subprocess.check_output(["date", "+%Z"]).decode('utf-8').strip().strip('"')),
+                    ('local timezone', f"{local_tz}"),
                     ('command line', ' '.join(map(str, sys.argv))),
                     ("python", ".".join(map(str, sys.version_info))),
                     ("python-bits", struct.calcsize("P") * 8),
@@ -188,11 +212,9 @@ class GithubIssuesUtils:
             f.write("----------\n")
             for item in debug_info:
                 f.write(f"{item[0]}: {item[1]}\n")
-            # pd.show_versions(as_json=False)
             f.close()
         except (KeyError, ValueError):
             pass
-
 
 
     def get_plot_monthly_span(self, length_constraint = None):
@@ -304,12 +326,12 @@ class GithubIssuesAPI:
         print(f"{self.__utils.stacktrace()} INFO remaining API call allowance = {self.__get_remaining_calls()}.")
 
         # check for valid response
-        # BUGFIX Feb 2023: use status_code, not content of header
         if not self.__response.status_code == 200:
             self.__status = 201
             self.__process_response_error()
             exit()
 
+        # update page references from header information
         if 'Link' in self.__response.headers:
             if self.__next_page != self.__last_page:
                 [self.__next_page_url] = re.findall("<([^<]*)>;\s+rel=.next",         self.__response.headers['Link'])
@@ -319,7 +341,6 @@ class GithubIssuesAPI:
                 self.__status = 202
                 print(f"{self.__utils.stacktrace()} WARN reached last page of the issues list.")
                 
-
 
     def __process_response_error(self):
         json = self.__response.json()
@@ -355,9 +376,29 @@ class GithubIssuesDB:
         self.table = 'issues'
         self.status = 0
         self.__set_table(db_table)
+        self.__reset_tables()
 
+    def __reset_tables(self):
+        '''
+    ~~~ OBJECT-INTERNAL METHOD ~~~
+    Class: GithubIssuesDB
+    Method: __reset_tables()
+    Argument(s): None
+    Return Value(s): None
+    Drops and re-creates empty issues & labels database tables. 
+    This must be done with every run in this version of RepoDash. However, in future versions I 
+    may implement the ability to run in update mode by specifying an existing issues database file. 
+        '''
+        try:
+            for table_name in self.allowable_tables:
+                self.drop_table(table_name)
+                self.create_table(table_name)
+            self.status = 0
+        except Exception as e:
+            self.status = 99
+            print(f"{self.stacktrace()} ERROR {self.status} failed to reset db tables.")
+            self.print_exception(e, 'SQL')
 
-    
     def __set_table(self, table_name):
         if table_name in list(self.allowable_tables.values()):
             self.table = table_name
@@ -656,6 +697,17 @@ class GithubIssuesDB:
 
 
     def count_issues(self, issue_type, year, month):
+        '''
+    Class: GithubIssuesDB
+    Method: count_issues()
+    Argument(s):
+        issue_type      string  ('issue' | 'pr')
+        year            integer (DateTimeIndex.year format)
+        month           integer (DateTimeIndex.month format)
+    Return Value(s):
+        [opened,closed] list(numpy.int32)
+    Count the number of issues both opened and closed in a given month
+        '''
         self.__set_table(self.allowable_tables['issues']) 
         return_val_open   = 'unknown'
         return_val_closed = 'unknown'
@@ -689,12 +741,21 @@ class GithubIssuesDB:
             self.status = 9
             print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
             self.print_exception(e, 'SQL')
-
-        # print(f"{self.stacktrace()} INFO {month:02d}-{year:4d}: issues found OPEN={return_val_open}, CLOSED={return_val_closed}")
         return [return_val_open, return_val_closed]
     
-    # count use of labels for issues opened prior to and which remain open at the stated point in time
+
     def count_labels_point_in_time(self, issue_type, point_in_time):
+        '''
+    Class: GithubIssuesDB
+    Method: count_labels_point_in_time()
+    Argument(s):
+        issue_type      string  ('issue' | 'pr')
+        point_in_time   string  (YYYY-MM-DD format)
+    Return Value(s):
+        open_counts     Dataframe(string, numpy.int32)
+    Count the use of labels for issues opened prior to and which remain open 
+    at the stated point in time (e.g. month end)
+        '''
         self.__set_table(self.allowable_tables['issues']) 
         open_labels = {}
         try:
@@ -831,6 +892,17 @@ class GithubIssuesDB:
 
 
     def count_monthly_open(self, issue_type, year, month):
+        '''
+    Class: GithubIssuesDB
+    Method: count_monthly_open()
+    Argument(s):
+        issue_type  string ('issue', 'pr')
+        year        integer (DateTimeIndex.year format)
+        month       integer (DateTimeIndex.month format)
+    Return Value(s):
+        count       numpy.int32
+    Count the number of issues opened in a given month which remain open today
+        '''
         self.__set_table(self.allowable_tables['issues']) 
         try:
             sql = '''
@@ -842,8 +914,9 @@ class GithubIssuesDB:
                         AND state = 'open'
             ''' % (self.table,)
             result_open = pd.read_sql(sql, self.engine, params=(self.repository_id, issue_type, month, year))
+            count = result_open.iloc[0,0]
             self.status = 0
-            return result_open.iloc[0,0]
+            return count
         except Exception as e:
             self.status = 21
             print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
@@ -851,6 +924,18 @@ class GithubIssuesDB:
 
 
     def count_monthly_unlabelled(self, issue_type, year, month):
+        '''
+    Class: GithubIssuesDB
+    Method: count_monthly_unlabelled()
+    Argument(s):
+        issue_type      string  ('issue' | 'pr')
+        year            integer (DateTimeIndex.year format)
+        month           integer (DateTimeIndex.month format)
+    Return Value(s):
+        count           numpy.int32
+    Count the number of issues opened in a given month which remain
+    open today and are also unlabelled
+        '''
         self.__set_table(self.allowable_tables['issues']) 
         try:
             sql = '''
@@ -863,8 +948,9 @@ class GithubIssuesDB:
                         AND label_count = 0
             ''' % (self.table,)
             result_open = pd.read_sql(sql, self.engine, params=(self.repository_id, issue_type, month, year))
+            count = result_open.iloc[0,0]
             self.status = 0
-            return result_open.iloc[0,0]
+            return count
         except Exception as e:
             self.status = 22
             print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
@@ -872,6 +958,18 @@ class GithubIssuesDB:
 
 
     def count_monthly_unassigned(self, issue_type, year, month):
+        '''
+    Class: GithubIssuesDB
+    Method: count_monthly_unassigned()
+    Argument(s):
+        issue_type      string  ('issue' | 'pr')
+        year            integer (DateTimeIndex.year format)
+        month           integer (DateTimeIndex.month format)
+    Return Value(s):
+        count           numpy.int32
+    Count the number of issues opened in a given month which remain
+    open today and which also have yet to be assigned to someone
+        '''
         self.__set_table(self.allowable_tables['issues']) 
         try:
             sql = '''
@@ -884,8 +982,9 @@ class GithubIssuesDB:
                         AND assign_count = 0
             ''' % (self.table,)
             result_open = pd.read_sql(sql, self.engine, params=(self.repository_id, issue_type, month, year))
+            count = result_open.iloc[0,0]
             self.status = 0
-            return result_open.iloc[0,0]
+            return count
         except Exception as e:
             self.status = 25
             print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
@@ -893,6 +992,18 @@ class GithubIssuesDB:
 
 
     def count_labelled(self, issue_type, year, month):
+        '''
+    Class: GithubIssuesDB
+    Method: count_labelled()
+    Argument(s):
+        issue_type      string  ('issue' | 'pr')
+        year            integer (DateTimeIndex.year format)
+        month           integer (DateTimeIndex.month format)
+    Return Value(s):
+        [opened,closed] list(numpy.int32)
+    Count the number of issues both opened and closed in a given month
+    which have been assigned labels
+        '''
         self.__set_table(self.allowable_tables['issues']) 
         return_val_open   = 'unknown'
         return_val_closed = 'unknown'
@@ -975,6 +1086,17 @@ class GithubIssuesDB:
             exit()
 
     def get_issue_ages(self, issue_type, month_end_date):
+        '''
+    Class: GithubIssuesDB
+    Method: get_issue_ages()
+    Argument(s):
+        issue_type          string  ('issue' | 'pr')
+        month_end_date      string  (YYYY-MM-DD)
+    Return Value(s):
+        [age1, age2,...]    list(numpy.int32)
+    Calculate the age of all issues that remain open at the end of a given
+    month and return a list of those open issue ages
+        '''
         self.__set_table(self.allowable_tables['issues']) 
         try:
             sql = '''
@@ -985,6 +1107,7 @@ class GithubIssuesDB:
                     AND (closed_date is NULL OR date(closed_date) > ?)
                     ORDER BY opened_date
             ''' % (self.table,)
+            # get opened dates for all issues that remained open at the end of the given month
             result = pd.read_sql(sql,
                                  self.engine,
                                  parse_dates={'opened_date': {'format': '%Y-%m-%d', 'utc': True}},
@@ -1000,6 +1123,7 @@ class GithubIssuesDB:
                 # create a minimal dataframe (required to keep box & violin plots happy)
                 result = pd.DataFrame([float('nan'), float('nan')])
                 return result
+            # calculate ages (in days) for all issues that remained open in the given month 
             return result.applymap(lambda x: (month_end_date - x).days)
         except Exception as e:
             self.status = 12
@@ -1140,6 +1264,33 @@ class GithubIssuesData:
     plot_window = property(__get_plot_window, None)
 
 
+    def calculate_monthly_issues_mix(self, args):
+        '''
+    Class: GithubIssuesData
+    Method: calculate_monthly_issues_mix()
+    Argument(s):
+        args                    A dictionary of argument/value pairs                
+    Return Value(s):
+        [[-1:1], [-1:1],...]    list(numpy.int32)
+    Calculate and return a list of the monthly mix of opened/closed issues
+    covering the time span of the data collected
+    range = [-1, 1], -ve => closed > opened, +ve => opened > closed
+        '''
+        [w_start, w_end] = self.set_plot_window(args)
+        w_start -= 1    # we want 1 month prior as well
+        w_end += 1      # account for open ended ranges
+
+        # calculate monthly mix of opened/closed issues
+        # range = [-1, 1], -ve => closed > opened, +ve => opened > closed
+        w_opened = self.opened_issue_counts[w_start:w_end].astype('float')
+        w_closed = self.closed_issue_counts[w_start:w_end].astype('float')
+        monthly_sum          = np.add(w_opened, w_closed)
+        monthly_issues_mix = -1 + (2 * np.true_divide(w_closed, monthly_sum,
+                                                      out=np.full_like(w_closed, 0.5, dtype=np.float),
+                                                      where=monthly_sum!=0))
+        return monthly_issues_mix
+
+
     def __get_status(self) -> int:
         return self.__status
         
@@ -1278,8 +1429,19 @@ class GithubIssuesData:
         return self.__groups
         
     def __set_groups(self, label_file: str):
-        self.__groups = pd.read_csv(label_file, names=['label','group']).drop_duplicates(subset=['label'], keep='first').dropna().reset_index()
-    
+        '''
+    groups property setter
+    parameter: a file path 
+    reads in a label CSV file associating labels to groups
+    populates a pandas dataframe, removing duplicates and skipping missing values
+    assigns the resulting dataframe to the private __groups attribute
+        '''
+        df = pd.read_csv(label_file, names=['label','group'])
+        df.drop_duplicates(subset=['label'], keep='first')
+        df.dropna().reset_index()
+        self.__groups = df
+
+
     groups = property(__get_groups, __set_groups)
 
 

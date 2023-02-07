@@ -1,153 +1,193 @@
-import re
-import sys, argparse
-import math
-
 from GithubIssues import GithubIssuesUtils, GithubIssuesAPI, GithubIssuesDB, GithubIssuesData
-
-import pandas as pd
+import math
 import numpy as np
-
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import to_rgba, ListedColormap
 import matplotlib.patches as mpatches
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import mplcursors
+import pandas as pd
 
 #################################################################
-### ONLINE REFERENCES                                         ###
+### ONLINE REFERENCES FOR MAJOR MODULE DEPENDENCIES           ###
 ### PANDAS:     https://pandas.pydata.org/pandas-docs/stable/ ###
 ### SQLITE:     https://sqlite.org/docs.html                  ###
 ### NUMPY:      https://docs.scipy.org/doc/numpy/reference/   ###
 ### MATPLOTLIB: https://matplotlib.org/3.1.1/tutorials        ###
 #################################################################
 
+# initialise the utility functions object and process the command-line arguments
+# to produce a dictionary of argument/value pairs
 gu = GithubIssuesUtils()
 args = gu.process_args()
-args = gu.args
 
-# simply write debug info to a file and quit if -i/--info arg is supplied
-if args['info'] == True:
-    gu.write_debug_info()
-    exit()
-
-# wipe and create an empty issues database table with every run
-# (future versions may implement incremental update capabilities)
-db = GithubIssuesDB(f'{gu.data_path}/issues', 'issues', echo=False)
 # initialise object for interfacing with GtihubAPI
 ga = GithubIssuesAPI()
+
+# initialise object for storing issues data collected via GithubAPI
+db = GithubIssuesDB(f'{gu.data_path}/issues', 'issues', echo=False)
+
 # initialise data structures for plotting data
 gd = GithubIssuesData()
 
 
-db.drop_table('issues')
-db.create_table('issues')
-
-db.drop_table('labels')
-db.create_table('labels')
-
-
-# read in issue labels (multiple-pages)
-ga.set_seed_url(args, 'labels')
-for page in range(0, args['page_count']):
-    ga.get_next_page(args)
-    for issue in ga.response.json():
-        db.insert_label(issue)
-    # stop when we've reached last page of labels
-    if ga.status == 202:
-        break
-
-
-if args['label_file'] is not None:
-    gd.groups = args['label_file']
-    #pd.read_csv(args['label_file'], names=['label','group']).drop_duplicates(subset=['label'], keep='first').dropna().reset_index()
-    db.update_labels(gd.groups)
-
-if args['out_label_file'] is not None:
-    db.get_labels().to_csv(args['out_label_file'], columns=['label', 'label_group'], encoding='utf-8', index=False)
-    exit()
-
-# read in issues list (multiple-pages)
-ga.set_seed_url(args, 'issues')
-for page in range(0, args['page_count']):
-    ga.get_next_page(args)
-    for issue in ga.response.json():
-        db.insert_issue(issue)
-    # stop when we've reached last page of issues
-    if ga.status == 202:
-        break
-
-# if no issue activity is found, go no further
-if db.count_records(f"{args['issue_type']}") == 0:
-    print (f"ERROR: no {args['issue_type']}s found")
-    exit()
+def process_labels(ga, db, gd, args):
+    '''
+    Function: process_labels()
+    Argument(s):
+        ga      GithubIssuesAPI instance
+        db      GithubIssuesDB instance
+        gd      GithubIssuesData instance
+        args    A dictionary of argument/value pairs
+    Return Value(s): None
+    Process the first N pages of labels used by the repository's issues 
+    into the RepoDash database (page count determined by command line argument) 
+    '''
+    # read in labels list (multiple-pages)
+    ga.set_seed_url(args, 'labels')
+    for page in range(0, args['page_count']):
+        ga.get_next_page(args)
+        for label in ga.response.json():
+            db.insert_label(label)
+        # stop when we've reached last page of labels
+        if ga.status == 202:
+            break
+    # read in a label grouping file if one is supplied
+    # produces a stacked (grouped) bar chart of label counts for open issues
+    if not args['label_file'] is None:
+        gd.groups = args['label_file']
+        db.update_labels(gd.groups)
+    # in label file generation mode,
+    # just write the labels processed out to a file and exit
+    if args['out_label_file'] is not None:
+        db.get_labels().to_csv(args['out_label_file'], 
+                               columns=['label', 'label_group'], 
+                               encoding='utf-8', 
+                               index=False)
+        exit()
 
 
-data_span = db.monthly_span
-gd.init_arrays(data_span)
+def process_issues(ga, db, gd, args):
+    '''
+    Function: process_issues()
+    
+    Argument(s):
+        ga      GithubIssuesAPI instance
+        db      GithubIssuesDB instance
+        gd      GithubIssuesData instance
+        args    A dictionary of argument/value pairs
+    
+    Return Value(s): 
+        data_span   DateTimeIndex (month-end dates, YYYY-MM-DD format)
+    data_span represents months for which issues data has been processed
+    
+    Process N pages of issues logged against the repository into the RepoDash
+    database (start page & page count determined by command line argument) 
+    '''
+    # read in issues list (multiple-pages)
+    ga.set_seed_url(args, 'issues')
+    for page in range(0, args['page_count']):
+        ga.get_next_page(args)
+        for issue in ga.response.json():
+            db.insert_issue(issue)
+        # stop when we've reached last page of issues
+        if ga.status == 202:
+            break
+    # if no issue activity is found, go no further
+    if db.count_records(f"{args['issue_type']}") == 0:
+        print (f"ERROR: no {args['issue_type']}s found")
+        exit()
+    data_span = db.monthly_span
+    gd.init_arrays(data_span)
+    return data_span
 
 
-# populate numpy data arrays for plotting
-# ([1] opened, [2] closed, [3] open & unlabelled [4] open & unassigned [5] open [6] total open & [7] ages)
-print("INFO Processing data...")
-i = 0
-for idx in data_span:
-    # [1] & [2]
-    [gd.opened_issue_counts[i],
-     gd.closed_issue_counts[i]] = db.count_issues(args['issue_type'],
-                                                  idx.year,
-                                                  idx.month)
-        
-    # [3]
-    gd.unlabelled_issue_counts[i] = db.count_monthly_unlabelled(args['issue_type'],
-                                                                idx.year,
-                                                                idx.month)
-    # [4]
-    gd.unassigned_issue_counts[i] = db.count_monthly_unassigned(args['issue_type'],
-                                                                idx.year,
-                                                                idx.month)
-    # [5]
-    gd.open_issue_counts[i] = db.count_monthly_open(args['issue_type'],
+def calculate_monthly_stats(db, gd, data_span, args):
+    '''
+    Function: calculate_monthly_stats()
+    Argument(s):
+        db          GithubIssuesDB instance
+        gd          GithubIssuesData instance
+        date_span   DateTimeIndex (month-end dates, YYYY-MM-DD format)
+        args        A dictionary of argument/value pairs
+    Return Value(s): None
+    Populate the following MONTHLY numpy data arrays for plotting
+    (arrays stored as attributes within the db object)
+    [1]  issues opened during the given month
+    [2]  issues closed during the given month
+    [3]  issues opened during the given month, currently still open
+    [4]  issues opened during the given month, currently still open & unlabelled
+    [5]  issues opened during the given month, currently still open & unassigned
+    [6]  total count of issues that remain open/unlabelled/unassigned at the end of the given month 
+    [7]  ages of all issues that remain open at the end of the given month 
+    '''
+    print("INFO Processing data...")
+    i = 0
+    for idx in data_span:
+        # [1] & [2]
+        [gd.opened_issue_counts[i],
+        gd.closed_issue_counts[i]] = db.count_issues(args['issue_type'],
                                                     idx.year,
                                                     idx.month)
-    # [6]
-    if i == 0:
-        gd.total_open_issue_counts[0] = (gd.open_issue_counts[0]
-                                         if args['offset_month'] == 'opened'
-                                         else gd.opened_issue_counts[0] - gd.closed_issue_counts[0])
-        gd.total_unlabelled_issue_counts[0] = gd.unlabelled_issue_counts[0]
-        gd.total_unassigned_issue_counts[0] = gd.unassigned_issue_counts[0]
-    else:
-        gd.total_open_issue_counts[i] = (gd.total_open_issue_counts[(i-1)] + gd.open_issue_counts[i]
-                                         if args['offset_month'] == 'opened'
-                                         else gd.total_open_issue_counts[(i-1)] + gd.opened_issue_counts[i] - gd.closed_issue_counts[i])
-        gd.total_unlabelled_issue_counts[i] = gd.total_unlabelled_issue_counts[i-1] + gd.unlabelled_issue_counts[i]       
-        gd.total_unassigned_issue_counts[i] = gd.total_unassigned_issue_counts[i-1] + gd.unassigned_issue_counts[i]       
-    # [7]
-    npa = db.get_issue_ages(args['issue_type'], idx.strftime('%Y-%m-%d'))
-    gd.issue_ages.append(npa.values.flatten())
-    i += 1
 
-gd.labels = gd.labels.add(db.count_labels_point_in_time(args['issue_type'],data_span[-1].strftime('%Y-%m-%d')), fill_value=0)
+        # [8] DO WE WANT TO CALULATE THIS HERE AND STORE IT IN THE gd OBJECT ???
+        #gd.monthly_issues_mix[i] = gd.calculate_monthly_issues_mix(args['issue_type'],
+        #                                                           idx.year,
+        #                                                           idx.month)
+
+        # [3]
+        gd.open_issue_counts[i] = db.count_monthly_open(args['issue_type'],
+                                                        idx.year,
+                                                        idx.month)
+        # [4]
+        gd.unlabelled_issue_counts[i] = db.count_monthly_unlabelled(args['issue_type'],
+                                                                    idx.year,
+                                                                    idx.month)
+        # [5]
+        gd.unassigned_issue_counts[i] = db.count_monthly_unassigned(args['issue_type'],
+                                                                    idx.year,
+                                                                    idx.month)
+        # [6]
+        # initialise total open/unlabelled/unassigned at end of month with first month's total
+        if i == 0:
+            gd.total_open_issue_counts[0] = (gd.open_issue_counts[0]
+                                            if args['offset_month'] == 'opened'
+                                            else gd.opened_issue_counts[0] - gd.closed_issue_counts[0])
+            gd.total_unlabelled_issue_counts[0] = gd.unlabelled_issue_counts[0]
+            gd.total_unassigned_issue_counts[0] = gd.unassigned_issue_counts[0]
+        # for each subsequent month, add prior month's total to current month's total
+        else:
+            gd.total_open_issue_counts[i] = (gd.total_open_issue_counts[(i-1)] + gd.open_issue_counts[i]
+                                            if args['offset_month'] == 'opened'
+                                            else gd.total_open_issue_counts[(i-1)] + gd.opened_issue_counts[i] - gd.closed_issue_counts[i])
+            gd.total_unlabelled_issue_counts[i] = gd.total_unlabelled_issue_counts[i-1] + gd.unlabelled_issue_counts[i]       
+            gd.total_unassigned_issue_counts[i] = gd.total_unassigned_issue_counts[i-1] + gd.unassigned_issue_counts[i]       
+
+        # [7]
+        npa = db.get_issue_ages(args['issue_type'], idx.strftime('%Y-%m-%d'))
+        gd.issue_ages.append(npa.values.flatten())
+        i += 1
+    # sum the label counts for open issues at the end of each month
+    gd.labels = gd.labels.add(db.count_labels_point_in_time(args['issue_type'],data_span[-1].strftime('%Y-%m-%d')), fill_value=0)
+
+
+process_labels(ga, db, gd, args)
+data_span = process_issues(ga, db, gd, args)
+calculate_monthly_stats(db, gd, data_span, args)
+monthly_issues_mix = gd.calculate_monthly_issues_mix(args)
 
 # identify start and end array indices for requested plotting time span
 [w_start, w_end] = gd.set_plot_window(args)
-w_start -= 1 # we want 1 month prior as well
-w_end += 1   # account for open ended ranges
+w_start -= 1    # we want 1 month prior as well
+w_end += 1      # account for open ended ranges
 
 # optional debug functions
 #db.show_issues(f"{args['issue_type']}")
 # db.show_statistics(gd.plot_window)
 
-# calculate monthly mix of opened/closed issues
-# range = [-1, 1], -ve => closed > opened, +ve => opened > closed
-w_opened = gd.opened_issue_counts[w_start:w_end].astype('float')
-w_closed = gd.closed_issue_counts[w_start:w_end].astype('float')
-monthly_sum          = np.add(w_opened, w_closed)
-monthly_issues_mix = -1 + (2 * np.true_divide(w_closed, monthly_sum,
-                                              out=np.full_like(w_closed, 0.5, dtype=np.float),
-                                              where=monthly_sum!=0))
+#xxxxxx
+
 
 # define heatmaps for displaying monthly issue mix data 
 cm_greens = cm.get_cmap('Greens', 15) # green = good (list reduction)
@@ -269,8 +309,7 @@ plot_label_counts(gd, db, ax=ax_lab, top=args['num_labels'])
 #######################################################################
 
 def plot_monthly_bar(x, y, label_offset_y=None, ax=None, **kwargs):
-    
-    
+        
     # provide default axis if axis is not specified
     if ax is None:
         ax = plt.gca()
