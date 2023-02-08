@@ -65,7 +65,9 @@ class GithubIssuesUtils:
                 'label_file'     : self.__label_file,
                 'out_label_file' : self.__out_label_file,
                 'num_labels'     : self.__num_labels,
-                'info'           : self.__info
+                'info'           : self.__info,
+                'summary_stats'  : self.__summary_stats,
+                'verbose_stats'  : self.__verbose_stats
                 }
 
 
@@ -114,6 +116,11 @@ class GithubIssuesUtils:
                             help="set number of labels to display in the top N frequency analysis display (default = 12)")
         arg_parser.add_argument('-i', '--info', action='store_true',
                             help="write environment info to debug_info.txt file for Github bug reporting")
+        arg_parser.add_argument('-ss', '--summarystats', action='store_true',
+                            help="write out a summary table showing monthly issue statistics")
+        arg_parser.add_argument('-vs', '--verbosestats', action='store_true',
+                            help="write out details of all issues collected and written to the db")
+
         args = arg_parser.parse_args()        
         self.__auth_token = vars(args)['authtoken']
         self.__fqdn = vars(args)['fqdn']
@@ -136,6 +143,8 @@ class GithubIssuesUtils:
         if self.__info == True:
             self.write_debug_info()
             exit()
+        self.__summary_stats = vars(args)['summarystats']
+        self.__verbose_stats = vars(args)['verbosestats']
         return self.args
 
 
@@ -1218,21 +1227,31 @@ class GithubIssuesData:
         self.__total_open_issue_counts       = np.zeros(length, dtype=int)
         self.__total_unlabelled_issue_counts = np.zeros(length, dtype=int)
         self.__total_unassigned_issue_counts = np.zeros(length, dtype=int)
+        self.__monthly_issues_mix            = np.zeros(length, dtype=int)
         self.set_month_labels(date_range, True)
         self.__labels = pd.DataFrame()
         self.__groups = pd.DataFrame()
         self.__issue_ages = []
-        
+
+
+
+## figure settings
+#fig, ax = plt.subplots(3, 3, figsize=(15, 10), constrained_layout=False)
+#plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.25, hspace=0.15)
+#title = f"Analysis of {db.get_repo_name()} Github {args['issue_type']}s for period {gd.month_labels[w_start+1]} to {gd.month_labels[w_end-1]}"
+#fig.suptitle(title, fontsize=16)
+# set monthly time block separation space
+#bar_spacing = 0.05
 
     def set_plot_window(self, args : dict) -> list:
 
         self.__status = 0
         self.__window_start_idx = None
         self.__window_end_idx = None
-        
+
         ref_date = args['ref_date']
         timespan = args['timespan']
-        
+
         search_string = calendar.month_abbr[pd.to_datetime(ref_date).month] + '-' + str(pd.to_datetime(ref_date).year)[2:]    
         date_search = np.where(self.__month_labels == search_string)
         self.__window_end_idx = (self.__month_labels.size-1 if date_search[0].size == 0 else date_search[0][0])
@@ -1251,79 +1270,78 @@ class GithubIssuesData:
             self.__window_start_idx = self.__window_end_idx + 1 - timespan
             print(f"{self.__utils.stacktrace()} INFO setting first plot month to {self.__month_labels[self.__window_start_idx]}")
 
-        return [self.__window_start_idx, self.__window_end_idx]
-    
+        # we want to add 1 month prior and 1 month after (accounts for open-ended range function)
+        return [self.__window_start_idx - 1, self.__window_end_idx + 1]
 
+
+    # getter & property definition for calculating and returning a plot window
     def __get_plot_window(self) -> list:
         start_month = pd.to_datetime(self.__month_labels[self.__window_start_idx], format='%b-%y')
         end_month = pd.to_datetime(self.__month_labels[self.__window_end_idx], format='%b-%y')
         end_month = pd.Period.to_timestamp(pd.Period(end_month, 'M')+1)
         plot_window = pd.date_range(start=start_month, end=end_month, closed=None, freq='M')
         return plot_window
-
     plot_window = property(__get_plot_window, None)
 
 
-    def calculate_monthly_issues_mix(self, args):
+    def group_labels(self, db):
+        # add a group classification column
+        self.__labels['label'] = self.__labels.index
+        self.__labels['group'] = self.__labels['label'].apply(lambda x: (db.get_label_group(x)))
+        # add an aggregated group count column
+        self.__labels['group_open_count'] = self.__labels['group'].apply(lambda x: self.__labels.groupby(['group'])['open_count'].sum().get(x))
+
+
+    def calculate_monthly_issues_mix(self):
         '''
     Class: GithubIssuesData
     Method: calculate_monthly_issues_mix()
-    Argument(s):
-        args                    A dictionary of argument/value pairs                
-    Return Value(s):
-        [[-1:1], [-1:1],...]    list(numpy.int32)
-    Calculate and return a list of the monthly mix of opened/closed issues
-    covering the time span of the data collected
-    range = [-1, 1], -ve => closed > opened, +ve => opened > closed
+    Argument(s):        None                
+    Return Value(s):    None
+    Calculate the monthly mix of opened/closed issues covering the full
+    time span of the data collected
+    range = [-1, 1], -ve => closed>opened, +ve => opened>closed
         '''
-        [w_start, w_end] = self.set_plot_window(args)
-        w_start -= 1    # we want 1 month prior as well
-        w_end += 1      # account for open ended ranges
-
-        # calculate monthly mix of opened/closed issues
-        # range = [-1, 1], -ve => closed > opened, +ve => opened > closed
-        w_opened = self.opened_issue_counts[w_start:w_end].astype('float')
-        w_closed = self.closed_issue_counts[w_start:w_end].astype('float')
+        w_opened = self.opened_issue_counts.astype('float')
+        w_closed = self.closed_issue_counts.astype('float')
         monthly_sum          = np.add(w_opened, w_closed)
-        monthly_issues_mix = -1 + (2 * np.true_divide(w_closed, monthly_sum,
-                                                      out=np.full_like(w_closed, 0.5, dtype=np.float),
-                                                      where=monthly_sum!=0))
-        return monthly_issues_mix
+        self.monthly_issues_mix = -1 + (2 * np.true_divide(w_closed, monthly_sum,
+                                                           out=np.full_like(w_closed, 0.5, dtype=np.float),
+                                                           where=monthly_sum!=0))
 
 
+    # getter, setter & property definition for accessing
+    # the private [__status] class attribute
     def __get_status(self) -> int:
-        return self.__status
-        
+        return self.__status        
     def __set_status(self, status_value: int):
         self.__status = status_value
-
     status = property(__get_status, __set_status)
 
 
+    # getter, setter & property definition for accessing
+    # the private [__timespan_months] class attribute
     def __get_timespan_months(self) -> int:
         return self.__timespan_months
-        
     def __set_timespan_months(self, months: int):
         self.__timespan_months = months
-
     timespan_months = property(__get_timespan_months, __set_timespan_months)
 
 
+    # getter, setter & property definition for accessing
+    # the private [__plot_points] class attribute
     def __get_plot_points(self) -> np.ndarray:
         return self.__plot_points
-        
     def __set_plot_points(self, plot_points: np.ndarray):
         self.__plot_points = np.copy(plot_points)
-        
     plot_points = property(__get_plot_points, __set_plot_points)
 
-
+    # getter, setter & property definition for accessing
+    # the private [__month_labels] class attribute
     def __get_month_labels(self) -> np.ndarray:
         return self.__month_labels
-
     def __set_month_labels(self, labels: np.ndarray):
         self.__month_labels = np.copy(labels)
-
     def set_month_labels(self, date_range: pd.DatetimeIndex = None, inclusive: bool = False):
         if date_range is None:
             length = self.__timespan_months
@@ -1340,94 +1358,98 @@ class GithubIssuesData:
                             for month,year in zip(months,years) ])
         labels[0] = ''
         self.__month_labels = np.copy(labels)
-        
     month_labels = property(__get_month_labels, __set_month_labels)
 
 
+    # getter, setter & property definition for accessing
+    # the private [__opened_issue_counts] class attribute
     def __get_opened_issue_counts(self) -> np.ndarray:
         return self.__opened_issue_counts
-        
     def __set_opened_issue_counts(self, counts: np.ndarray):
         self.__opened_issue_counts = np.copy(counts)
-
     opened_issue_counts = property(__get_opened_issue_counts, __set_opened_issue_counts)
 
 
+    # getter, setter & property definition for accessing
+    # the private [__closed_issue_counts] class attribute
     def __get_closed_issue_counts(self) -> np.ndarray:
         return self.__closed_issue_counts
-        
     def __set_closed_issue_counts(self, counts: np.ndarray):
         self.__closed_issue_counts = np.copy(counts)
-
     closed_issue_counts = property(__get_closed_issue_counts, __set_closed_issue_counts)
 
 
+    # getter, setter & property definition for accessing
+    # the private [__open_issue_counts] class attribute
     def __get_open_issue_counts(self) -> np.ndarray:
         return self.__open_issue_counts
-        
     def __set_open_issue_counts(self, counts: np.ndarray):
         self.__open_issue_counts = np.copy(counts)
-
     open_issue_counts = property(__get_open_issue_counts, __set_open_issue_counts)
 
 
+    # getter, setter & property definition for accessing
+    # the private [__unlabelled_issue_counts] class attribute
     def __get_unlabelled_issue_counts(self) -> np.ndarray:
         return self.__unlabelled_issue_counts
-        
     def __set_unlabelled_issue_counts(self, counts: np.ndarray):
         self.__unlabelled_issue_counts = np.copy(counts)
-
     unlabelled_issue_counts = property(__get_unlabelled_issue_counts, __set_unlabelled_issue_counts)
 
 
+    # getter, setter & property definition for accessing
+    # the private [__unassigned_issue_counts] class attribute
     def __get_unassigned_issue_counts(self) -> np.ndarray:
         return self.__unassigned_issue_counts
-        
     def __set_unassigned_issue_counts(self, counts: np.ndarray):
         self.__unassigned_issue_counts = np.copy(counts)
+    unassigned_issue_counts = property(__get_unassigned_issue_counts, 
+                                       __set_unassigned_issue_counts)
 
-    unassigned_issue_counts = property(__get_unassigned_issue_counts, __set_unassigned_issue_counts)
 
-
+    # getter, setter & property definition for accessing
+    # the private [__total_open_issue_counts] class attribute
     def __get_total_open_issue_counts(self) -> np.ndarray:
         return self.__total_open_issue_counts
-        
     def __set_total_open_issue_counts(self, counts: np.ndarray):
         self.__total_open_issue_counts = np.copy(counts)
+    total_open_issue_counts = property(__get_total_open_issue_counts,
+                                       __set_total_open_issue_counts)
 
-    total_open_issue_counts = property(__get_total_open_issue_counts, __set_total_open_issue_counts)
 
-
+    # getter, setter & property definition for accessing
+    # the private [__total_unlabelled_issue_counts] class attribute
     def __get_total_unlabelled_issue_counts(self) -> np.ndarray:
         return self.__total_unlabelled_issue_counts
-        
     def __set_total_unlabelled_issue_counts(self, counts: np.ndarray):
         self.__total_unlabelled_issue_counts = np.copy(counts)
+    total_unlabelled_issue_counts = property(__get_total_unlabelled_issue_counts, 
+                                             __set_total_unlabelled_issue_counts)
 
-    total_unlabelled_issue_counts = property(__get_total_unlabelled_issue_counts, __set_total_unlabelled_issue_counts)
 
-
+    # getter, setter & property definition for accessing
+    # the private [__total_unassigned_issue_counts] class attribute
     def __get_total_unassigned_issue_counts(self) -> np.ndarray:
-        return self.__total_unassigned_issue_counts
-        
+        return self.__total_unassigned_issue_counts        
     def __set_total_unassigned_issue_counts(self, counts: np.ndarray):
         self.__total_unassigned_issue_counts = np.copy(counts)
+    total_unassigned_issue_counts = property(__get_total_unassigned_issue_counts, 
+                                             __set_total_unassigned_issue_counts)
 
-    total_unassigned_issue_counts = property(__get_total_unassigned_issue_counts, __set_total_unassigned_issue_counts)
 
-
+    # getter, setter & property definition for accessing
+    # the private [__labels] class attribute
     def __get_labels(self) -> pd.DataFrame:
-        return self.__labels
-        
+        return self.__labels        
     def __set_labels(self, labels: pd.DataFrame):
-        self.__labels = labels.copy()
-    
+        self.__labels = labels.copy()    
     labels = property(__get_labels, __set_labels)
 
 
+    # getter, setter & property definition for accessing
+    # the private [__groups] class attribute
     def __get_groups(self) -> pd.DataFrame:
         return self.__groups
-        
     def __set_groups(self, label_file: str):
         '''
     groups property setter
@@ -1440,26 +1462,27 @@ class GithubIssuesData:
         df.drop_duplicates(subset=['label'], keep='first')
         df.dropna().reset_index()
         self.__groups = df
-
-
     groups = property(__get_groups, __set_groups)
 
 
-    def group_labels(self, db):
-        # add a group classification column
-        self.__labels['label'] = self.__labels.index
-        self.__labels['group'] = self.__labels['label'].apply(lambda x: (db.get_label_group(x)))
-        # add an aggregated group count column
-        self.__labels['group_open_count'] = self.__labels['group'].apply(lambda x: self.__labels.groupby(['group'])['open_count'].sum().get(x))
-
-
+    # getter, setter & property definition for accessing
+    # the private [__issue_ages] class attribute
     def __get_issue_ages(self) -> list:
         return self.__issue_ages
-        
     def __set_issue_ages(self, ages: list):
         self.__issue_ages = ages.copy()
-
     def issue_ages_append(self, ages: np.ndarray):
         self.__issue_ages.append(ages.copy())
+    issue_ages = property(__get_issue_ages, 
+                          __set_issue_ages)
 
-    issue_ages = property(__get_issue_ages, __set_issue_ages)
+
+    # getter, setter & property definition for accessing
+    # the private [__monthly_issues_mix] class attribute
+    def __get_monthly_issues_mix(self) -> list:
+        return self.__monthly_issues_mix
+    def __set_monthly_issues_mix(self, monthly_issues_mix: list):
+        self.__monthly_issues_mix = monthly_issues_mix.copy()
+    monthly_issues_mix = property(__get_monthly_issues_mix, 
+                                  __set_monthly_issues_mix)
+
