@@ -17,21 +17,6 @@ import pandas as pd
 ### MATPLOTLIB: https://matplotlib.org/3.1.1/tutorials        ###
 #################################################################
 
-# initialise the utility functions object and process the command-line arguments
-# to produce a dictionary of argument/value pairs
-gu = GithubIssuesUtils()
-args = gu.process_args()
-
-# initialise object for interfacing with GtihubAPI
-ga = GithubIssuesAPI()
-
-# initialise object for storing issues data collected via GithubAPI
-db = GithubIssuesDB(f'{gu.data_path}/issues', 'issues', echo=False)
-
-# initialise data structures for plotting data
-gd = GithubIssuesData()
-
-
 def process_labels(ga, db, gd, args):
     '''
     Function: process_labels()
@@ -112,8 +97,8 @@ def calculate_monthly_stats(db, gd, data_span, args):
         date_span   DateTimeIndex (month-end dates, YYYY-MM-DD format)
         args        A dictionary of argument/value pairs
     Return Value(s): None
-    Populate the following MONTHLY numpy data arrays for plotting
-    (arrays stored as attributes within the db object)
+    Populate the following monthly numpy data arrays for plotting
+    (arrays stored as list attributes within the db instance)
     [1]  issues opened during the given month
     [2]  issues closed during the given month
     [3]  issues opened during the given month, currently still open
@@ -121,6 +106,8 @@ def calculate_monthly_stats(db, gd, data_span, args):
     [5]  issues opened during the given month, currently still open & unassigned
     [6]  total count of issues that remain open/unlabelled/unassigned at the end of the given month 
     [7]  ages of all issues that remain open at the end of the given month 
+    [8]  monthly issues mix [-1,1]: -ve => closed>opened, +ve => opened>closed
+    [9]  label counts for open issues at the end of the given month
     '''
     print("INFO Processing data...")
     i = 0
@@ -130,12 +117,6 @@ def calculate_monthly_stats(db, gd, data_span, args):
         gd.closed_issue_counts[i]] = db.count_issues(args['issue_type'],
                                                     idx.year,
                                                     idx.month)
-
-        # [8] DO WE WANT TO CALULATE THIS HERE AND STORE IT IN THE gd OBJECT ???
-        #gd.monthly_issues_mix[i] = gd.calculate_monthly_issues_mix(args['issue_type'],
-        #                                                           idx.year,
-        #                                                           idx.month)
-
         # [3]
         gd.open_issue_counts[i] = db.count_monthly_open(args['issue_type'],
                                                         idx.year,
@@ -168,54 +149,10 @@ def calculate_monthly_stats(db, gd, data_span, args):
         npa = db.get_issue_ages(args['issue_type'], idx.strftime('%Y-%m-%d'))
         gd.issue_ages.append(npa.values.flatten())
         i += 1
-    # sum the label counts for open issues at the end of each month
-    gd.labels = gd.labels.add(db.count_labels_point_in_time(args['issue_type'],data_span[-1].strftime('%Y-%m-%d')), fill_value=0)
-
-
-process_labels(ga, db, gd, args)
-data_span = process_issues(ga, db, gd, args)
-calculate_monthly_stats(db, gd, data_span, args)
-monthly_issues_mix = gd.calculate_monthly_issues_mix(args)
-
-# identify start and end array indices for requested plotting time span
-[w_start, w_end] = gd.set_plot_window(args)
-w_start -= 1    # we want 1 month prior as well
-w_end += 1      # account for open ended ranges
-
-# optional debug functions
-#db.show_issues(f"{args['issue_type']}")
-# db.show_statistics(gd.plot_window)
-
-#xxxxxx
-
-
-# define heatmaps for displaying monthly issue mix data 
-cm_greens = cm.get_cmap('Greens', 15) # green = good (list reduction)
-cm_reds   = cm.get_cmap('Reds', 15)   # red   = bad  (list growth)
-cm_greens.set_over('#FFFF00')         # use yellow as default out of range green colour
-cm_reds.set_over('#FF00FF')           # use purple as default out of range red colour
-
-# construct the colorbar from the heatmaps
-pos_cmap = cm.get_cmap('Greens_r', 15)
-neg_cmap = cm.get_cmap('Reds', 15)
-newcolors = np.vstack((pos_cmap(np.linspace(0, 0.7, 15)),
-                       neg_cmap(np.linspace(0.3, 1, 15))))
-combined_cmap = ListedColormap(newcolors, name='GreenRed')
-neutral = np.array(to_rgba('skyblue'))
-newcolors[14:16, :] = neutral # define neutral colour for balanced mix of issues
-for color in newcolors:       # set transparency level (same as for plots)
-    color[3] = 0.75           
-
-# set monthly time block separation space
-bar_spacing = 0.05
-
-# figure settings
-#plt.style.use('seaborn-whitegrid')
-fig, ax = plt.subplots(3, 3, figsize=(15, 10), constrained_layout=False)
-
-plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.25, hspace=0.15)
-title = f"Analysis of {db.get_repo_name()} Github {args['issue_type']}s for period {gd.month_labels[w_start+1]} to {gd.month_labels[w_end-1]}"
-fig.suptitle(title, fontsize=16)
+    # [8]
+    gd.calculate_monthly_issues_mix()
+    # [9] 
+    gd.labels = gd.labels.add(db.count_labels_point_in_time(args['issue_type'], data_span[-1].strftime('%Y-%m-%d')), fill_value=0)
 
 
 ###########################################################
@@ -273,7 +210,6 @@ def plot_label_counts(gd , db, ax=None, **kwargs):
         ax.set_ylabel(f"Label Counts for Open Issues (Top {top}, grouped)", labelpad=10)
     else:
         ax.set_ylabel(f"Label Counts for Open Issues (Top {top})", labelpad=10)
-        
     
     cursor = mplcursors.cursor(hover=True)
 
@@ -298,11 +234,6 @@ def plot_label_counts(gd , db, ax=None, **kwargs):
             sel.artist[sel.target.index].set_edgecolor(highlight_config['ec'])
             sel.artist[sel.target.index].set_linewidth(5)
             sel.artist[sel.target.index].set_facecolor(highlight_config['fc'])
-
-# calling code for topmost metrics dashboard (monthly counts)
-ax_lab = plt.subplot(3,3,(1,4))
-plot_label_counts(gd, db, ax=ax_lab, top=args['num_labels'])
-
 
 #######################################################################
 ### TOP SUBPLOT - count of issues opened or closed during the month ###
@@ -387,6 +318,7 @@ def plot_monthly_counts(opened_counts, closed_counts , ax=None, **kwargs):
     open_counts = kwargs.get('open_counts', [])    
     start_idx = kwargs.get('start_idx', 0)
     end_idx = kwargs.get('end_idx', None)
+    issue_type = kwargs.get('issue_type', None)
 
     # define data slices according to start_idx and end_idx, with sensible defaults
     if end_idx is None:
@@ -438,7 +370,7 @@ def plot_monthly_counts(opened_counts, closed_counts , ax=None, **kwargs):
     
     ax.axis([0, opened.size, 0, ax_height])
     ax.invert_yaxis()
-    ax.set_ylabel(f"Newly Opened/Closed {args['issue_type']}s", labelpad=10)
+    ax.set_ylabel(f"Newly Opened/Closed {issue_type}s", labelpad=10)
 
     ax.tick_params(
         axis='x',          # changes apply to the x-axis
@@ -449,161 +381,210 @@ def plot_monthly_counts(opened_counts, closed_counts , ax=None, **kwargs):
  
     legend = []
     legend.append(mpatches.Patch(color=opened_config['color'], alpha=opened_config['alpha'],
-                                 label=f"opened {args['issue_type']}s"))
+                                 label=f"opened {issue_type}s"))
     legend.append(mpatches.Patch(color=closed_config['color'], alpha=closed_config['alpha'],
-                                 label=f"closed {args['issue_type']}s"))
+                                 label=f"closed {issue_type}s"))
     if len(open_issue) > 0:
         legend.append(mpatches.Patch(color=open_config['color'], alpha=open_config['alpha'],
-                                     label=f"{args['issue_type']}s still open"))
+                                     label=f"{issue_type}s still open"))
     if len(unlabelled) > 0:
         legend.append(mpatches.Patch(color=unlabelled_config['color'], alpha=unlabelled_config['alpha'],
-                                     label=f"{args['issue_type']}s requires triage"))
+                                     label=f"{issue_type}s requires triage"))
     if len(unassigned) > 0:
         legend.append(mpatches.Patch(color=unassigned_config['color'], alpha=unassigned_config['alpha'],
-                                     label=f"unassigned open {args['issue_type']}s"))
+                                     label=f"unassigned open {issue_type}s"))
     ax.legend(handles=legend, ncol=len(legend), borderaxespad=0, bbox_to_anchor=(0, 1.02, 1, .102), loc='lower right')
 
     # Show the grid lines as dark grey lines
     ax.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=0.25)
 
-
-# calling code for topmost metrics dashboard (monthly counts)
-ax_top = plt.subplot(3,3,(2,3))
-plot_monthly_counts(gd.opened_issue_counts, gd.closed_issue_counts, start_idx=w_start, end_idx=w_end, ax=ax_top,
-                    open_counts=gd.open_issue_counts,
-                    unlabelled_counts=gd.unlabelled_issue_counts,
-                    unassigned_counts=gd.unassigned_issue_counts)
-
 ###########################################################################
 ### MIDDLE SUBPLOT - total issues open at the start & end of each month ###
 ###########################################################################
-plt.subplot(3,3,(5,6))
 
-total_open = gd.total_open_issue_counts[w_start:w_end]
-total_unlabelled = gd.total_unlabelled_issue_counts[w_start:w_end]
+def issue_mix_colormap():
+    '''
+    Function: issue_mix_colormap()
+    Argument(s):        None0
+    Return Value(s):    Matplotlib ListedColormap object
 
-y_range = max(total_open.max() - total_open.min(), total_unlabelled.max() - total_unlabelled.min())
-# y_range = total_open.max() - total_open.min()
-y_padding = math.ceil(y_range * 0.1) 
+    Construct and return a user-defined color map for heat-mapping the panel
+    displaying the total issues open at the start and end of each month, 
+    according to the mix of issues opened and closed that month
+    '''
+    positive_colormap = cm.get_cmap('Greens_r', 15)
+    negative_colormap = cm.get_cmap('Reds', 15)
+    combined_colormap = np.vstack((positive_colormap(np.linspace(0, 0.7, 15)),
+                                   negative_colormap(np.linspace(0.3, 1, 15))))
+    neutral = np.array(to_rgba('skyblue'))
+    combined_colormap[14:16, :] = neutral   # define neutral colour for balanced mix of issues
+    for color in combined_colormap:         # set transparency level (same as for plots)
+        color[3] = 0.75           
+    return ListedColormap(combined_colormap, name='GreenRed')
 
-# first axis created is plotted first, with axis and labels on the left
-# we want 'requires triage' count to go behind 'open' count
-ax_mid_r = plt.gca()
-ax_mid_l = ax_mid_r.twinx()
-ax_mid = ax_mid_l.twinx()
 
-# swap left and right ticks and labels around
-# we want 'open' count on left / 'requires triage' on right
-ax_mid_l.yaxis.tick_left()
-ax_mid_l.yaxis.set_label_position("left")
-ax_mid_r.yaxis.tick_right()
-ax_mid_r.yaxis.set_label_position("right")
+def plot_total_counts(total_open_counts, total_unlabelled_counts, issues_mix,
+                      fig=None, ax=None, **kwargs):
+    '''
+    Function: plot_total_counts()
+    Argument(s):        
+        total_open_counts           numpy array (int)
+        total_unlabelled_counts     numpy array (int)
+        issues_mix                  numpy array (int)
+        ax                          matplotlib axes
+        start_index                 int - start month in the array
+        end_index                   int - end month in the array
+        bar_spacing                 float (matplotlib configuration value)
+    Return Value(s): None
+    Plot the middle panel of the dataviz, including total open issues at start and 
+    end of each month as well as total untriaged (unlabelled) issues.
+    '''
+    # first axis created is plotted first, with axis and labels on the left
+    # we want 'requires triage' count to go behind 'open' count
+    # provide default axis if axis is not specified
+    ax_mid_r = ax if not ax is None else plt.gca()
+    ax_mid_l = ax_mid_r.twinx()
+    ax_mid = ax_mid_l.twinx()
 
-ax_mid_l.set_ylabel(f"Total Open {args['issue_type']}s")
-ax_mid_r.set_ylabel(f"Total Open {args['issue_type']}s Requiring Triage")
+    # process other keyword arguments
+    start_idx = kwargs.get('start_idx', 0)
+    end_idx = kwargs.get('end_idx', None)
+    bar_spacing = kwargs.get('bar_spacing', 0)
+    issue_type = kwargs.get('issue_type', None)
 
-bbox_props = dict(boxstyle="round,pad=0.2", fc=(1,1,0.9), ec="k", lw=1.5)
-
-t = ax_mid_l.text(0.5, total_open[0]+(y_padding/2),
-                  str(total_open[0]),
-                  ha="center", va="bottom", rotation=0,
-                  size=12, weight="bold",
-                  bbox=bbox_props)
-
-# create monthly fill areas/lines
-for i in range(1,total_open.size):
-    start  = i - (0.5-bar_spacing)
-    finish = i + (0.5-bar_spacing)
-
-    start_unl  = i - 0.5
-    finish_unl = i + 0.5
-
-    start_narrow  = i - ((0.5-bar_spacing)*0.7)
-    finish_narrow = i + ((0.5-bar_spacing)*0.7)
-
-    # time block shading
-    ax_mid_r.fill_between([start,finish],
-                          [total_open.max()+y_padding, total_open.max()+y_padding],
-                          y2=0, color='#EEEEEE', alpha=1)
-        
-    # fill areas (unlabelled)
-    ax_mid_r.fill_between([start,finish],
-                          total_unlabelled[i-1:i+1],
-                          y2=0, facecolor='w', alpha=1)
-    
-    # fill areas (unlabelled)
-    ax_mid_r.fill_between([start,finish],
-                          total_unlabelled[i-1:i+1],
-                          y2=0, facecolor='r', alpha=0.2)
-
-    # top lines (unlabelled)
-    ax_mid_r.plot([start,finish],
-                  total_unlabelled[i-1:i+1],
-                  color="w", alpha=1, linewidth=3)
-
-    # determine color map to use (increasing/decreasing numbers and deadband around zero)
-    if monthly_issues_mix[i] < -0.05:
-        col = cm_reds((-monthly_issues_mix[i]+0.5)/1.5)
-    elif monthly_issues_mix[i] > 0.05:
-        col = cm_greens((monthly_issues_mix[i]+0.5)/1.5)
+    # define data slices according to start_idx and end_idx, with sensible defaults
+    if end_idx is None:
+        total_open = total_open_counts[start_idx:]
+        total_unlabelled = (total_unlabelled_counts[start_idx:] if total_unlabelled_counts is not None else [])
+        monthly_issues_mix = issues_mix[start_idx:]
     else:
-        col = "skyblue"
+        total_open = total_open_counts
+        total_unlabelled = (total_unlabelled_counts[start_idx:end_idx] if total_unlabelled_counts is not None else [])
+        monthly_issues_mix = issues_mix[start_idx:end_idx]
 
-    # fill areas (open)
-    ax_mid_l.fill_between([start_narrow,finish_narrow],
-                          total_open[i-1:i+1],
-                          y2=0, color=col, alpha=1)
-    
-    # top lines (open)
-    ax_mid_l.plot([start_narrow,finish_narrow],
-                  total_open[i-1:i+1],
-                  color="w", alpha=1, linewidth=3)
-    # top lines (unlabelled)
-    ax_mid.plot([start,finish],
-                  total_unlabelled[i-1:i+1],
-                  color="w", alpha=1, linewidth=0.3)
-    
-    t = ax_mid_l.text(i+0.5, total_open[i]+(y_padding/2),
-                      str(total_open[i]),
+    y_range = max(total_open.max() - total_open.min(), total_unlabelled.max() - total_unlabelled.min())
+    y_padding = math.ceil(y_range * 0.1)
+
+    # swap left and right ticks and labels around
+    # we want 'open' count on left / 'requires triage' on right
+    ax_mid_l.yaxis.tick_left()
+    ax_mid_l.yaxis.set_label_position("left")
+    ax_mid_r.yaxis.tick_right()
+    ax_mid_r.yaxis.set_label_position("right")
+
+    ax_mid_l.set_ylabel(f"Total Open {issue_type}s")
+    ax_mid_r.set_ylabel(f"Total Open {issue_type}s Requiring Triage")
+
+    bbox_props = dict(boxstyle="round,pad=0.2", fc=(1,1,0.9), ec="k", lw=1.5)
+
+    t = ax_mid_l.text(0.5, total_open[0]+(y_padding/2),
+                      str(total_open[0]),
                       ha="center", va="bottom", rotation=0,
                       size=12, weight="bold",
                       bbox=bbox_props)
 
-# plot 'requires triage' using a linearly offset scale relative to 'open'
-mid_l_range = y_range + y_padding
-ax_mid_l.axis([0, total_open.size, total_open.min(), total_open.min() + mid_l_range])
-ax_mid_r.axis([0, total_open.size, total_unlabelled.min(), total_unlabelled.min() + mid_l_range])
-ax_mid.axis([0, total_open.size, total_unlabelled.min(), total_unlabelled.min() + mid_l_range])
+    # create monthly fill areas/lines
+    for i in range(1,total_open.size):
+        start  = i - (0.5-bar_spacing)
+        finish = i + (0.5-bar_spacing)
 
-ax_mid_r.tick_params(
-    axis='x',          # changes apply to the x-axis
-    which='both',      # both major and minor ticks are affected
-    bottom=False,      # ticks along the bottom edge are off
-    top=False,         # ticks along the top edge are off
-    labelbottom=False) # labels along the bottom edge are off
+        start_unl  = i - 0.5
+        finish_unl = i + 0.5
 
-# Show the grid lines as dark grey lines
-ax_mid_l.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=0.25)
+        start_narrow  = i - ((0.5-bar_spacing)*0.7)
+        finish_narrow = i + ((0.5-bar_spacing)*0.7)
 
-light_red_patch   = mpatches.Patch(fc='r', alpha=0.2, label=f"aggregate # of {args['issue_type']}s requiring triage")
-ax_mid_r.legend(handles=[light_red_patch],
-                bbox_to_anchor=(0, 1.02, 1, .102), loc='lower right',
-                ncol=1, borderaxespad=0)
+        # time block shading
+        ax_mid_r.fill_between([start,finish],
+                              [total_open.max()+y_padding, total_open.max()+y_padding],
+                              y2=0, color='#EEEEEE', alpha=1)
+        
+        # fill areas (unlabelled)
+        ax_mid_r.fill_between([start,finish],
+                              total_unlabelled[i-1:i+1],
+                              y2=0, facecolor='w', alpha=1)
+    
+        # fill areas (unlabelled)
+        ax_mid_r.fill_between([start,finish],
+                              total_unlabelled[i-1:i+1],
+                              y2=0, facecolor='r', alpha=0.2)
 
-### create a color map bar to display on the right side of the plot
-cbar_ax = inset_axes(ax_mid,
-                     width="2%",     # width  = 2% of parent_bbox width
-                     height="100%",  # height = 100% of parent_bbox height
-                     loc='lower left',
-                     bbox_to_anchor=(1.1, 0, 1, 1),
-                     bbox_transform=ax_mid.transAxes,
-                     borderpad=0)
+        # top lines (unlabelled)
+        ax_mid_r.plot([start,finish],
+                      total_unlabelled[i-1:i+1],
+                      color="w", alpha=1, linewidth=3)
 
-data = np.random.randn(1, 1) # dummy 2D array (allows me to create the pcolormesh below)
-psm = ax_mid.pcolormesh(data, cmap=combined_cmap, rasterized=True, vmin=-100, vmax=100)
-cbar = fig.colorbar(psm, ax=ax_mid, cax=cbar_ax)
-cbar.ax.get_yaxis().set_ticks([])
-cbar.ax.set_ylabel(f"<--more closed      more opened-->\nmix of {args['issue_type']} activity", labelpad=5, rotation=90)
+
+        # define heatmaps for displaying monthly issue mix data 
+        # determine color map to use (increasing/decreasing numbers and deadband around zero)
+        # list growth (red, bad)
+        if monthly_issues_mix[i] < -0.05:
+            cm_reds   = cm.get_cmap('Reds', 15)
+            cm_reds.set_over('#FF00FF')     # use purple as default out of range red colour
+            col = cm_reds((-monthly_issues_mix[i]+0.5)/1.5)
+        # list reduction (green, good)
+        elif monthly_issues_mix[i] > 0.05:
+            cm_greens = cm.get_cmap('Greens', 15)
+            cm_greens.set_over('#FFFF00')   # use yellow as default out of range green colour
+            col = cm_greens((monthly_issues_mix[i]+0.5)/1.5)
+        else:
+            col = "skyblue"
+
+        # fill areas (open)
+        ax_mid_l.fill_between([start_narrow,finish_narrow],
+                              total_open[i-1:i+1],
+                              y2=0, color=col, alpha=1)
+    
+        # top lines (open)
+        ax_mid_l.plot([start_narrow,finish_narrow],
+                      total_open[i-1:i+1],
+                      color="w", alpha=1, linewidth=3)
+        # top lines (unlabelled)
+        ax_mid.plot([start,finish],
+                      total_unlabelled[i-1:i+1],
+                      color="w", alpha=1, linewidth=0.3)
+    
+        t = ax_mid_l.text(i+0.5, total_open[i]+(y_padding/2),
+                          str(total_open[i]),
+                          ha="center", va="bottom", rotation=0,
+                          size=12, weight="bold",
+                          bbox=bbox_props)
+
+    # plot 'requires triage' using a linearly offset scale relative to 'open'
+    mid_l_range = y_range + y_padding
+    ax_mid_l.axis([0, total_open.size, total_open.min(), total_open.min() + mid_l_range])
+    ax_mid_r.axis([0, total_open.size, total_unlabelled.min(), total_unlabelled.min() + mid_l_range])
+    ax_mid.axis([0, total_open.size, total_unlabelled.min(), total_unlabelled.min() + mid_l_range])
+
+    ax_mid_r.tick_params(
+        axis='x',          # changes apply to the x-axis
+        which='both',      # both major and minor ticks are affected
+        bottom=False,      # ticks along the bottom edge are off
+        top=False,         # ticks along the top edge are off
+        labelbottom=False) # labels along the bottom edge are off
+
+    # Show the grid lines as dark grey lines
+    ax_mid_l.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=0.25)
+
+    light_red_patch   = mpatches.Patch(fc='r', alpha=0.2, label=f"aggregate # of {issue_type}s requiring triage")
+    ax_mid_r.legend(handles=[light_red_patch],
+                    bbox_to_anchor=(0, 1.02, 1, .102), loc='lower right',
+                    ncol=1, borderaxespad=0)
+
+    ### create a color map bar to display on the right side of the plot
+    cbar_ax = inset_axes(ax_mid,
+                         width="2%",     # width  = 2% of parent_bbox width
+                         height="100%",  # height = 100% of parent_bbox height
+                         loc='lower left',
+                         bbox_to_anchor=(1.1, 0, 1, 1),
+                         bbox_transform=ax_mid.transAxes,
+                         borderpad=0)
+
+    data = np.random.randn(1, 1) # dummy 2D array (allows me to create the pcolormesh below)
+    psm = ax_mid.pcolormesh(data, cmap=issue_mix_colormap(), rasterized=True, vmin=-100, vmax=100)
+    cbar = fig.colorbar(psm, ax=ax_mid, cax=cbar_ax)
+    cbar.ax.get_yaxis().set_ticks([])
+    cbar.ax.set_ylabel(f"<--more closed      more opened-->\nmix of {issue_type} activity", labelpad=5, rotation=90)
 
 #################################################################################
 ### BOTTOM SUBPLOT - age distribution of open issues at the end of each month ###
@@ -619,82 +600,195 @@ def adjacent_values(vals, q1, q3):
     lower_adjacent_value = np.clip(lower_adjacent_value, vals[0], q1)
     return lower_adjacent_value, upper_adjacent_value
 
-ages = gd.issue_ages[w_start:w_end]
-positions = np.arange(0,len(ages))
-labels = gd.month_labels[w_start:w_end]
 
-medianprops = dict(linewidth=2, color='w')
+def plot_age_distributions(issue_ages, month_labels, ax=None, **kwargs):
+    '''
+    Function: plot_age_distributions()
+    Argument(s):        
+        issue_ages                  numpy array (int)
+        month_labels                numpy array ('Mon-YY') e.g. 'Jan-21'
+        ax                          matplotlib axes
+        start_index                 int - start month in the array
+        end_index                   int - end month in the array
+        bar_spacing                 float (matplotlib configuration value)
+    Return Value(s): None
+    Plot the middle panel of the dataviz, including total open issues at start and 
+    end of each month as well as total untriaged (unlabelled) issues.
+    '''
+    # first axis created is plotted first, with axis and labels on the left
+    # we want 'requires triage' count to go behind 'open' count
+    # provide default axis if axis is not specified
+    #ax_mid_r = ax if not ax is None else plt.gca()
+    #ax_mid_l = ax_mid_r.twinx()
+    #ax_mid = ax_mid_l.twinx()
 
-max_age = 0
-for item in ages:
-    if len(item) > 0 and item.max() > max_age:
-        max_age = item.max()
+    # process other keyword arguments
+    start_idx = kwargs.get('start_idx', 0)
+    end_idx = kwargs.get('end_idx', None)
+    bar_spacing = kwargs.get('bar_spacing', 0)
+    issue_type = kwargs.get('issue_type', 0)
 
-# create monthly fill areas/lines
-for i in range(1,len(ages)):
-    start  = i - (0.5-bar_spacing)
-    finish = i + (0.5-bar_spacing)
+    # define data slices according to start_idx and end_idx, with sensible defaults
+    if end_idx is None:
+        ages = issue_ages[start_idx:]
+        labels = month_labels[start_idx:]
+    else:
+        ages = issue_ages[start_idx:end_idx]
+        labels = month_labels[start_idx:end_idx]
 
-    # time block shading
-    plt.fill_between([start,finish], [max_age,max_age], color='#EEAAAA', alpha=0.5)
-    plt.fill_between([start,finish], [360,360], color='#EEEEAA', alpha=0.5)
-    plt.fill_between([start,finish], [180,180],   color='#AAEEAA', alpha=0.5)
+    positions = np.arange(0,len(ages))
 
-parts = plt.violinplot(ages[1:], positions=positions[1:],
-                       showmeans=False, showmedians=False, showextrema=False)
+    #ages = gd.issue_ages[w_start:w_end]
+    #positions = np.arange(0,len(ages))
+    #labels = gd.month_labels[w_start:w_end]
+
+    medianprops = dict(linewidth=2, color='w')
+
+    max_age = 0
+    for item in ages:
+        if len(item) > 0 and item.max() > max_age:
+            max_age = item.max()
+
+        # create monthly fill areas/lines
+    for i in range(1,len(ages)):
+        start  = i - (0.5-bar_spacing)
+        finish = i + (0.5-bar_spacing)
+
+        # time block shading
+        plt.fill_between([start,finish], [max_age,max_age], color='#EEAAAA', alpha=0.5)
+        plt.fill_between([start,finish], [360,360], color='#EEEEAA', alpha=0.5)
+        plt.fill_between([start,finish], [180,180],   color='#AAEEAA', alpha=0.5)
+
+    parts = plt.violinplot( ages[1:], positions=positions[1:],
+                            showmeans=False, showmedians=False, showextrema=False )
+
+    for pc in parts['bodies']:
+        pc.set_facecolor('#D43F3A')
+        pc.set_edgecolor('black')
+        pc.set_alpha(1)
+
+    quartile1 = []
+    medians = []
+    quartile3 = []
+    for month in ages:
+        q1, m, q3 = np.percentile(month.tolist(), [25, 50, 75], axis=0)
+        quartile1.append(q1)
+        medians.append(m)
+        quartile3.append(q3)
+
+    whiskers = np.array([adjacent_values(sorted_array, q1, q3)
+                         for sorted_array, q1, q3
+                         in zip(ages, quartile1, quartile3)])
+    whiskersMin, whiskersMax = whiskers[1:, 0], whiskers[1:, 1]
+
+    inds = np.arange(0, len(medians))
+    plt.scatter(inds[1:], medians[1:], marker='o', color='white', s=30, zorder=3)
+    plt.vlines(inds[1:], quartile1[1:], quartile3[1:], color='k', linestyle='-', lw=5)
+    plt.vlines(inds[1:], whiskersMin, whiskersMax, color='k', linestyle='-', lw=1)
+
+    plt.axis([0,len(ages),0,max_age])
+    plt.xticks(np.arange(labels.size), labels, rotation=60) 
+    plt.xlabel("Calendar Month")
+    plt.ylabel(f"{issue_type} Age (days)", labelpad=10)
+
+    # Show the grid lines as dark grey lines
+    plt.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=0.25)
+
+    above_patch  = mpatches.Patch(color='#EEAAAA', label='above target (bad)')
+    target_patch = mpatches.Patch(color='#EEEEAA', label='target age range')
+    below_patch  = mpatches.Patch(color='#AAEEAA', label='below target (good)')
+
+    plt.legend(handles=[above_patch, target_patch, below_patch],
+               bbox_to_anchor=(0, 1.02, 1, .102),
+               loc='lower right',
+               ncol=3,
+               borderaxespad=0)
+    
+    # hide final panel (bottom left)
+    plt.subplot(3,3,7).axis('off')
 
 
-for pc in parts['bodies']:
-    pc.set_facecolor('#D43F3A')
-    pc.set_edgecolor('black')
-    pc.set_alpha(1)
-
-quartile1 = []
-medians = []
-quartile3 = []
-for month in ages:
-    q1, m, q3 = np.percentile(month.tolist(), [25, 50, 75], axis=0)
-    quartile1.append(q1)
-    medians.append(m)
-    quartile3.append(q3)
-
-whiskers = np.array([adjacent_values(sorted_array, q1, q3)
-                     for sorted_array, q1, q3
-                     in zip(ages, quartile1, quartile3)])
-whiskersMin, whiskersMax = whiskers[1:, 0], whiskers[1:, 1]
-
-inds = np.arange(0, len(medians))
-plt.scatter(inds[1:], medians[1:], marker='o', color='white', s=30, zorder=3)
-plt.vlines(inds[1:], quartile1[1:], quartile3[1:], color='k', linestyle='-', lw=5)
-plt.vlines(inds[1:], whiskersMin, whiskersMax, color='k', linestyle='-', lw=1)
-
-plt.axis([0,len(ages),0,max_age])
-plt.xticks(np.arange(labels.size), labels, rotation=60) 
-plt.xlabel("Calendar Month")
-plt.ylabel(f"{args['issue_type']} Age (days)", labelpad=10)
-
-# Show the grid lines as dark grey lines
-plt.grid(axis='y', b=True, which='major', color='#666666', linestyle='-', alpha=0.25)
-
-above_patch  = mpatches.Patch(color='#EEAAAA', label='above target (bad)')
-target_patch = mpatches.Patch(color='#EEEEAA', label='target age range')
-below_patch  = mpatches.Patch(color='#AAEEAA', label='below target (good)')
-
-plt.legend(handles=[above_patch, target_patch, below_patch],
-           bbox_to_anchor=(0, 1.02, 1, .102),
-           loc='lower right',
-           ncol=3,
-           borderaxespad=0)
-
-# hide final panel (bottom left)
-plt.subplot(3,3,7).axis('off')
 
 
+def output(args):
+    if args['save_file'] is None:
+        plt.show()
+    else:
+        print(f"{gu.stacktrace()} INFO writing metrics image to file ({args['save_file']}).") 
+        plt.savefig(args['save_file'])
 
-if args['save_file'] is None:
-    plt.show()
-else:
-    print(f"{gu.stacktrace()} INFO writing metrics image to file ({args['save_file']}).") 
-    plt.savefig(args['save_file'])
+
+def main() -> None:
+
+    # initialise the utility functions object and process the command-line arguments
+    # to produce a dictionary of argument/value pairs
+    gu = GithubIssuesUtils()
+    args = gu.process_args()
+
+    # initialise object for interfacing with GtihubAPI
+    ga = GithubIssuesAPI()
+
+    # initialise object for storing issues data collected via GithubAPI
+    db = GithubIssuesDB(f'{gu.data_path}/issues', 'issues', echo=False)
+
+    # initialise data structures for plotting data
+    gd = GithubIssuesData()
+
+    process_labels(ga, db, gd, args)
+    data_span = process_issues(ga, db, gd, args)
+    calculate_monthly_stats(db, gd, data_span, args)
+
+    # identify start and end array indices for requested plotting time span
+    [w_start, w_end] = gd.set_plot_window(args)
+
+    # optional debug functions
+    # where needed, it's best to run these after data ingestion & analysis, but before plotting
+    if args['verbose_stats']: 
+        0db.show_issues(f"{args['issue_type']}")
+
+    if args['summary_stats']:
+        db.show_statistics(gd.plot_window)
+
+    ## figure settings
+    fig, ax = plt.subplots(3, 3, figsize=(15, 10), constrained_layout=False)
+    plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.25, hspace=0.15)
+    title = f"Analysis of {db.get_repo_name()} Github {args['issue_type']}s for period {gd.month_labels[w_start+1]} to {gd.month_labels[w_end-1]}"
+    fig.suptitle(title, fontsize=16)
+    # set monthly time block separation space
+    bar_spacing = 0.05
+
+
+    # calling code for topmost metrics dashboard (monthly counts)
+    ax_lab = plt.subplot(3,3,(1,4))
+    plot_label_counts(gd, db, ax=ax_lab, top=args['num_labels'])
+
+    # calling code for topmost metrics dashboard (monthly counts)
+    ax_top = plt.subplot(3,3,(2,3))
+    plot_monthly_counts(gd.opened_issue_counts, gd.closed_issue_counts, 
+                        ax=ax_top, start_idx=w_start, end_idx=w_end,
+                        issue_type=args['issue_type'],
+                        open_counts=gd.open_issue_counts,
+                        unlabelled_counts=gd.unlabelled_issue_counts,
+                        unassigned_counts=gd.unassigned_issue_counts)
+
+    # calling code for middle metrics dashboard (total counts)
+    ax_mid = plt.subplot(3,3,(5,6))
+    plot_total_counts(gd.total_open_issue_counts, gd.total_unlabelled_issue_counts, gd.monthly_issues_mix,
+                      fig=fig, ax=ax_mid, start_idx=w_start, end_idx=w_end, 
+                      issue_type=args['issue_type'],
+                      bar_spacing=bar_spacing)
+
+    # calling code for middle metrics dashboard (total counts)
+    ax_bottom = plt.subplot(3,3,(8,9))
+    plot_age_distributions(gd.issue_ages, gd.month_labels,
+                           ax=ax_bottom, start_idx=w_start, end_idx=w_end, 
+                           issue_type=args['issue_type'],
+                           bar_spacing=bar_spacing)
+
+    # throw up a data viz or write out to a file
+    output(args)
+
+if __name__ == "__main__":
+    main()
     
 
