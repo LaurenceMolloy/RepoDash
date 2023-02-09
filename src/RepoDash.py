@@ -7,7 +7,6 @@ from matplotlib.colors import to_rgba, ListedColormap
 import matplotlib.patches as mpatches
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import mplcursors
-import pandas as pd
 
 #################################################################
 ### ONLINE REFERENCES FOR MAJOR MODULE DEPENDENCIES           ###
@@ -272,7 +271,7 @@ def plot_monthly_bar(x, y, label_offset_y=None, ax=None, **kwargs):
         ax.text(start_x+label_offset_x, y+label_offset_y,
                 str(y),
                 ha="center", va="top", rotation=0,
-                size=12, weight="bold",
+                size=8, weight="bold",
                 bbox=bbox_props)
 
 def plot_monthly_counts(opened_counts, closed_counts , ax=None, **kwargs):
@@ -335,7 +334,7 @@ def plot_monthly_counts(opened_counts, closed_counts , ax=None, **kwargs):
         open_issue = (open_counts[start_idx:end_idx] if open_counts is not None else [])
 
     # calculate required axis height, allowing for some headroom
-    ax_height = math.ceil(np.concatenate([opened[1:], closed[1:]]).max() * 1.1)
+    ax_height = math.ceil(np.concatenate([opened[1:], closed[1:]]).max() * 1.2)
 
     # create monthly fill areas/lines
     for i in range(1,opened.size):
@@ -458,12 +457,12 @@ def plot_total_counts(total_open_counts, total_unlabelled_counts, issues_mix,
         total_unlabelled = (total_unlabelled_counts[start_idx:] if total_unlabelled_counts is not None else [])
         monthly_issues_mix = issues_mix[start_idx:]
     else:
-        total_open = total_open_counts
+        total_open = total_open_counts[start_idx:end_idx]
         total_unlabelled = (total_unlabelled_counts[start_idx:end_idx] if total_unlabelled_counts is not None else [])
         monthly_issues_mix = issues_mix[start_idx:end_idx]
 
     y_range = max(total_open.max() - total_open.min(), total_unlabelled.max() - total_unlabelled.min())
-    y_padding = math.ceil(y_range * 0.1)
+    y_padding = math.ceil(y_range * 0.2)
 
     # swap left and right ticks and labels around
     # we want 'open' count on left / 'requires triage' on right
@@ -477,10 +476,11 @@ def plot_total_counts(total_open_counts, total_unlabelled_counts, issues_mix,
 
     bbox_props = dict(boxstyle="round,pad=0.2", fc=(1,1,0.9), ec="k", lw=1.5)
 
+    # the first total count box
     t = ax_mid_l.text(0.5, total_open[0]+(y_padding/2),
                       str(total_open[0]),
                       ha="center", va="bottom", rotation=0,
-                      size=12, weight="bold",
+                      size=8, weight="bold",
                       bbox=bbox_props)
 
     # create monthly fill areas/lines
@@ -488,22 +488,22 @@ def plot_total_counts(total_open_counts, total_unlabelled_counts, issues_mix,
         start  = i - (0.5-bar_spacing)
         finish = i + (0.5-bar_spacing)
 
-        start_unl  = i - 0.5
-        finish_unl = i + 0.5
+        #start_unl  = i - 0.5
+        #finish_unl = i + 0.5
 
-        start_narrow  = i - ((0.5-bar_spacing)*0.7)
-        finish_narrow = i + ((0.5-bar_spacing)*0.7)
+        start_narrow  = i - ((0.5-bar_spacing)*0.8)
+        finish_narrow = i + ((0.5-bar_spacing)*0.8)
 
         # time block shading
         ax_mid_r.fill_between([start,finish],
                               [total_open.max()+y_padding, total_open.max()+y_padding],
                               y2=0, color='#EEEEEE', alpha=1)
-        
+
         # fill areas (unlabelled)
         ax_mid_r.fill_between([start,finish],
                               total_unlabelled[i-1:i+1],
                               y2=0, facecolor='w', alpha=1)
-    
+
         # fill areas (unlabelled)
         ax_mid_r.fill_between([start,finish],
                               total_unlabelled[i-1:i+1],
@@ -513,7 +513,6 @@ def plot_total_counts(total_open_counts, total_unlabelled_counts, issues_mix,
         ax_mid_r.plot([start,finish],
                       total_unlabelled[i-1:i+1],
                       color="w", alpha=1, linewidth=3)
-
 
         # define heatmaps for displaying monthly issue mix data 
         # determine color map to use (increasing/decreasing numbers and deadband around zero)
@@ -544,10 +543,11 @@ def plot_total_counts(total_open_counts, total_unlabelled_counts, issues_mix,
                       total_unlabelled[i-1:i+1],
                       color="w", alpha=1, linewidth=0.3)
     
-        t = ax_mid_l.text(i+0.5, total_open[i]+(y_padding/2),
+        # ith total count boxes
+        t = ax_mid_l.text(i+0.5, total_open[i]+(y_padding/4),
                           str(total_open[i]),
                           ha="center", va="bottom", rotation=0,
-                          size=12, weight="bold",
+                          size=8, weight="bold",
                           bbox=bbox_props)
 
     # plot 'requires triage' using a linearly offset scale relative to 'open'
@@ -703,11 +703,6 @@ def plot_age_distributions(issue_ages, month_labels, ax=None, **kwargs):
                loc='lower right',
                ncol=3,
                borderaxespad=0)
-    
-    # hide final panel (bottom left)
-    plt.subplot(3,3,7).axis('off')
-
-
 
 
 def output(args):
@@ -744,19 +739,18 @@ def main() -> None:
     # optional debug functions
     # where needed, it's best to run these after data ingestion & analysis, but before plotting
     if args['verbose_stats']: 
-        0db.show_issues(f"{args['issue_type']}")
+        db.show_issues(f"{args['issue_type']}")
 
     if args['summary_stats']:
         db.show_statistics(gd.plot_window)
 
     ## figure settings
     fig, ax = plt.subplots(3, 3, figsize=(15, 10), constrained_layout=False)
-    plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.25, hspace=0.15)
+    plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.25, hspace=0.20)
     title = f"Analysis of {db.get_repo_name()} Github {args['issue_type']}s for period {gd.month_labels[w_start+1]} to {gd.month_labels[w_end-1]}"
     fig.suptitle(title, fontsize=16)
     # set monthly time block separation space
     bar_spacing = 0.05
-
 
     # calling code for topmost metrics dashboard (monthly counts)
     ax_lab = plt.subplot(3,3,(1,4))
@@ -785,10 +779,11 @@ def main() -> None:
                            issue_type=args['issue_type'],
                            bar_spacing=bar_spacing)
 
+    # hide final panel (bottom left)
+    plt.subplot(3,3,7).axis('off')
+
     # throw up a data viz or write out to a file
     output(args)
 
 if __name__ == "__main__":
     main()
-    
-
