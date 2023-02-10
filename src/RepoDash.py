@@ -1,3 +1,40 @@
+'''
+RepoDash, by Laurence Molloy - (c) 2019
+
+Filename:   RepoDash.py
+Purpose:    generate a performance metrics dashboard for a github repository
+            (main executable file)
+
+USER GUIDE:             https://laurencemolloy.github.io/RepoDash
+SOLUTION ARCHITECTURE:  REPODASH_ROOT/docs/images/SolutionDesign.png
+
+MAJOR MODULE DEPENDENCIES (important version constraints noted)
+PANDAS:                 https://pandas.pydata.org/pandas-docs/stable/
+SQLALCHEMY  < v2.0      https://docs.sqlalchemy.org/en/14/contents.html
+SQLITE:                 https://sqlite.org/docs.html                 
+NUMPY:      < v1.24.0   https://docs.scipy.org/doc/numpy/reference/  
+MATPLOTLIB:             https://matplotlib.org/3.1.1/tutorials      
+
+Version History:
+VERSION DATE           AUTHORED-BY          REVIEWED-BY
+================================================================================
+0.1     31/12/2019     Laurence Molloy
+initial release - supports any public repositories
+--------------------------------------------------------------------------------
+0.2     02/01/2020     Laurence Molloy
+Personal access tokens (increased requests/min), triage metrics & bug fixes
+--------------------------------------------------------------------------------
+0.3     07/02/2020     Laurence Molloy
+Saving output to file, grouped label metrics & improved documenatation
+--------------------------------------------------------------------------------
+0.4     03/12/2020     Laurence Molloy
+Github Enterprise repositories
+--------------------------------------------------------------------------------
+1.0     11/02/2023     Laurence Molloy
+Code refactoring & improved documenatation
+================================================================================
+'''
+
 from GithubIssues import GithubIssuesUtils, GithubIssuesAPI, GithubIssuesDB, GithubIssuesData
 import math
 import numpy as np
@@ -8,14 +45,6 @@ import matplotlib.patches as mpatches
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import mplcursors
 
-#################################################################
-### ONLINE REFERENCES FOR MAJOR MODULE DEPENDENCIES           ###
-### PANDAS:     https://pandas.pydata.org/pandas-docs/stable/ ###
-### SQLITE:     https://sqlite.org/docs.html                  ###
-### NUMPY:      https://docs.scipy.org/doc/numpy/reference/   ###
-### MATPLOTLIB: https://matplotlib.org/3.1.1/tutorials        ###
-#################################################################
-
 def process_labels(ga, db, gd, args):
     '''
     Function: process_labels()
@@ -25,8 +54,8 @@ def process_labels(ga, db, gd, args):
         gd      GithubIssuesData instance
         args    A dictionary of argument/value pairs
     Return Value(s): None
-    Process the first N pages of labels used by the repository's issues 
-    into the RepoDash database (page count determined by command line argument) 
+    Process the first N pages of labels used by the repository's issues
+    into the RepoDash database (page count determined by command line argument)
     '''
     # read in labels list (multiple-pages)
     ga.set_seed_url(args, 'labels')
@@ -45,9 +74,9 @@ def process_labels(ga, db, gd, args):
     # in label file generation mode,
     # just write the labels processed out to a file and exit
     if args['out_label_file'] is not None:
-        db.get_labels().to_csv(args['out_label_file'], 
-                               columns=['label', 'label_group'], 
-                               encoding='utf-8', 
+        db.get_labels().to_csv(args['out_label_file'],
+                               columns=['label', 'label_group'],
+                               encoding='utf-8',
                                index=False)
         exit()
 
@@ -55,19 +84,19 @@ def process_labels(ga, db, gd, args):
 def process_issues(ga, db, gd, args):
     '''
     Function: process_issues()
-    
+
     Argument(s):
         ga      GithubIssuesAPI instance
         db      GithubIssuesDB instance
         gd      GithubIssuesData instance
         args    A dictionary of argument/value pairs
-    
-    Return Value(s): 
+
+    Return Value(s):
         data_span   DateTimeIndex (month-end dates, YYYY-MM-DD format)
     data_span represents months for which issues data has been processed
-    
+
     Process N pages of issues logged against the repository into the RepoDash
-    database (start page & page count determined by command line argument) 
+    database (start page & page count determined by command line argument)
     '''
     # read in issues list (multiple-pages)
     ga.set_seed_url(args, 'issues')
@@ -103,8 +132,8 @@ def calculate_monthly_stats(db, gd, data_span, args):
     [3]  issues opened during the given month, currently still open
     [4]  issues opened during the given month, currently still open & unlabelled
     [5]  issues opened during the given month, currently still open & unassigned
-    [6]  total count of issues that remain open/unlabelled/unassigned at the end of the given month 
-    [7]  ages of all issues that remain open at the end of the given month 
+    [6]  total count of issues that remain open/unlabelled/unassigned at the end of the given month
+    [7]  ages of all issues that remain open at the end of the given month
     [8]  monthly issues mix [-1,1]: -ve => closed>opened, +ve => opened>closed
     [9]  label counts for open issues at the end of the given month
     '''
@@ -141,8 +170,8 @@ def calculate_monthly_stats(db, gd, data_span, args):
             gd.total_open_issue_counts[i] = (gd.total_open_issue_counts[(i-1)] + gd.open_issue_counts[i]
                                             if args['offset_month'] == 'opened'
                                             else gd.total_open_issue_counts[(i-1)] + gd.opened_issue_counts[i] - gd.closed_issue_counts[i])
-            gd.total_unlabelled_issue_counts[i] = gd.total_unlabelled_issue_counts[i-1] + gd.unlabelled_issue_counts[i]       
-            gd.total_unassigned_issue_counts[i] = gd.total_unassigned_issue_counts[i-1] + gd.unassigned_issue_counts[i]       
+            gd.total_unlabelled_issue_counts[i] = gd.total_unlabelled_issue_counts[i-1] + gd.unlabelled_issue_counts[i]
+            gd.total_unassigned_issue_counts[i] = gd.total_unassigned_issue_counts[i-1] + gd.unassigned_issue_counts[i]
 
         # [7]
         npa = db.get_issue_ages(args['issue_type'], idx.strftime('%Y-%m-%d'))
@@ -150,7 +179,7 @@ def calculate_monthly_stats(db, gd, data_span, args):
         i += 1
     # [8]
     gd.calculate_monthly_issues_mix()
-    # [9] 
+    # [9]
     gd.labels = gd.labels.add(db.count_labels_point_in_time(args['issue_type'], data_span[-1].strftime('%Y-%m-%d')), fill_value=0)
 
 
@@ -159,15 +188,15 @@ def calculate_monthly_stats(db, gd, data_span, args):
 ###########################################################
 
 def plot_label_counts(gd , db, ax=None, **kwargs):
-    
+
     # provide default axis if axis is not specified
     if ax is None:
         ax = plt.gca()
-    
+
     # process configuration values, setting to default values where silent
     bar_config = {'ec': 'w', 'lw': 1, **kwargs.get('bar_config', {})}
     highlight_config = {'ec': 'r', 'fc': '#00FF00', **kwargs.get('highlight_config', {})}
-    
+
     # process other keyword arguments
     top = kwargs.get('top', 12)
     level = kwargs.get('level', 'group')
@@ -189,7 +218,7 @@ def plot_label_counts(gd , db, ax=None, **kwargs):
         i=0
         l=0
         for index, row in group.iterrows():
-            
+
             c = (0 if max_label_count == 0 else int(row['open_count'])/max_label_count)
             ax.bar(name, int(row['open_count']), bottom=l, color=colors[int(row['open_count'])], edgecolor=bar_config['ec'], linewidth=bar_config['lw'],
                      label=f"{row['label']}: {int(row['open_count'])}")
@@ -202,14 +231,14 @@ def plot_label_counts(gd , db, ax=None, **kwargs):
     ymax = max(4,max_group_count)
     ax.set_ylim([0,ymax])
     ax.locator_params(axis='y', nbins=4)
-    
+
     ax.set_xticks(np.arange(top))   # len(group_open_count)))
     ax.set_xticklabels(group_open_count.index[0:top], rotation=90)
     if level == 'group':
         ax.set_ylabel(f"Label Counts for Open Issues (Top {top}, grouped)", labelpad=10)
     else:
         ax.set_ylabel(f"Label Counts for Open Issues (Top {top})", labelpad=10)
-    
+
     cursor = mplcursors.cursor(hover=True)
 
     @cursor.connect("add")
@@ -239,7 +268,7 @@ def plot_label_counts(gd , db, ax=None, **kwargs):
 #######################################################################
 
 def plot_monthly_bar(x, y, label_offset_y=None, ax=None, **kwargs):
-        
+
     # provide default axis if axis is not specified
     if ax is None:
         ax = plt.gca()
@@ -264,7 +293,7 @@ def plot_monthly_bar(x, y, label_offset_y=None, ax=None, **kwargs):
                 color=config['line_color'],
                 alpha=config['line_alpha'],
                 zorder=config['zorder'])
-    
+
     if label_offset_y is not None:
         label_offset_x = config['width'] / 2
         bbox_props = dict(boxstyle="round,pad=0.2", fc=(1,1,0.9), ec=(0.75,0,0), lw=1.5)
@@ -275,18 +304,18 @@ def plot_monthly_bar(x, y, label_offset_y=None, ax=None, **kwargs):
                 bbox=bbox_props)
 
 def plot_monthly_counts(opened_counts, closed_counts , ax=None, **kwargs):
-    
+
     # provide default axis if axis is not specified
     if ax is None:
         ax = plt.gca()
-    
+
     # process configuration values, setting to default values where silent
-    tbox_config = {'color': '#EEEEEE', 'alpha': 1, 'zorder': 0, 'align': 'edge', 
+    tbox_config = {'color': '#EEEEEE', 'alpha': 1, 'zorder': 0, 'align': 'edge',
                    'line_color': 'w', 'line_alpha': 0, 'line_width': 0, 'spacing': 0.05,
                    **kwargs.get('tbox_config', {})}
     tbox_config.update({'width': 1 - (2 * tbox_config['spacing'])})
-    
-    opened_config = {'color': '#BB0000', 'alpha': 0.5, 'zorder': 1, 'align': 'center', 
+
+    opened_config = {'color': '#BB0000', 'alpha': 0.5, 'zorder': 1, 'align': 'center',
                      'line_color': 'w', 'line_alpha': 1, 'line_width': 1, 'width_pct': 0.45,
                      **kwargs.get('opened_config', {})}
     opened_config.update({'width': opened_config['width_pct']*tbox_config['width']})
@@ -295,26 +324,26 @@ def plot_monthly_counts(opened_counts, closed_counts , ax=None, **kwargs):
                      'line_color': 'w', 'line_alpha': 1, 'line_width': 1, 'width_pct': 0.45,
                      **kwargs.get('closed_config', {})}
     closed_config.update({'width': closed_config['width_pct']*tbox_config['width']})
-    
+
     open_config = {'color': '#FF0000', 'alpha': 0.4, 'zorder': 3, 'align': 'center',
                    'line_color': 'w', 'line_alpha': 1, 'line_width': 1, 'width_pct': 0.45,
                    **kwargs.get('open_config', {})}
     open_config.update({'width': open_config['width_pct']*tbox_config['width']})
-    
+
     unlabelled_config = {'color': '#FF0000', 'alpha': 0.2, 'zorder': 4, 'align': 'center',
                          'line_color': 'w', 'line_alpha': 1, 'line_width': 1, 'width_pct': 0.45,
                          **kwargs.get('unlabelled_config', {})}
     unlabelled_config.update({'width': unlabelled_config['width_pct']*tbox_config['width']})
-    
+
     unassigned_config = {'color': '#BB0000', 'alpha': 0.8, 'zorder': 5, 'align': 'center',
                          'line_color': 'w', 'line_alpha': 0, 'line_width': 0, 'width_pct': 0.05,
                          **kwargs.get('unassigned_config', {})}
     unassigned_config.update({'width': unassigned_config['width_pct']*tbox_config['width']})
-    
+
     # process other keyword arguments
     unlabelled_counts = kwargs.get('unlabelled_counts', [])
     unassigned_counts = kwargs.get('unassigned_counts', [])
-    open_counts = kwargs.get('open_counts', [])    
+    open_counts = kwargs.get('open_counts', [])
     start_idx = kwargs.get('start_idx', 0)
     end_idx = kwargs.get('end_idx', None)
     issue_type = kwargs.get('issue_type', None)
@@ -347,7 +376,7 @@ def plot_monthly_counts(opened_counts, closed_counts , ax=None, **kwargs):
         # 'opened this month' count bar
         x = (start if opened_config['align'] == 'edge' else (start+i)/2)
         plot_monthly_bar(x, opened[i], label_offset_y=(ax_height*0.05), ax=ax, config=opened_config)
-        
+
         # 'closed this month' count bar
         x = (i if closed_config['align'] == 'edge' else (i+finish)/2)
         plot_monthly_bar(x, closed[i], label_offset_y=(ax_height*0.05), ax=ax, config=closed_config)
@@ -361,12 +390,12 @@ def plot_monthly_counts(opened_counts, closed_counts , ax=None, **kwargs):
         if len(unlabelled) > 0:
             x = (start if unlabelled_config['align'] == 'edge' else (start+i)/2)
             plot_monthly_bar(x, unlabelled[i], ax=ax, config=unlabelled_config)
-        
+
         # (optional) 'opened this month, currently still open & unassigned' count bar
         if len(unassigned) > 0:
             x = (start if unassigned_config['align'] == 'edge' else (start+i)/2)
             plot_monthly_bar(x, unassigned[i], ax=ax, config=unassigned_config)
-    
+
     ax.axis([0, opened.size, 0, ax_height])
     ax.invert_yaxis()
     ax.set_ylabel(f"Newly Opened/Closed {issue_type}s", labelpad=10)
@@ -377,7 +406,7 @@ def plot_monthly_counts(opened_counts, closed_counts , ax=None, **kwargs):
         bottom=False,      # ticks along the bottom edge are off
         top=False,         # ticks along the top edge are off
         labelbottom=False) # labels along the bottom edge are off
- 
+
     legend = []
     legend.append(mpatches.Patch(color=opened_config['color'], alpha=opened_config['alpha'],
                                  label=f"opened {issue_type}s"))
@@ -408,7 +437,7 @@ def issue_mix_colormap():
     Return Value(s):    Matplotlib ListedColormap object
 
     Construct and return a user-defined color map for heat-mapping the panel
-    displaying the total issues open at the start and end of each month, 
+    displaying the total issues open at the start and end of each month,
     according to the mix of issues opened and closed that month
     '''
     positive_colormap = cm.get_cmap('Greens_r', 15)
@@ -418,7 +447,7 @@ def issue_mix_colormap():
     neutral = np.array(to_rgba('skyblue'))
     combined_colormap[14:16, :] = neutral   # define neutral colour for balanced mix of issues
     for color in combined_colormap:         # set transparency level (same as for plots)
-        color[3] = 0.75           
+        color[3] = 0.75
     return ListedColormap(combined_colormap, name='GreenRed')
 
 
@@ -426,7 +455,7 @@ def plot_total_counts(total_open_counts, total_unlabelled_counts, issues_mix,
                       fig=None, ax=None, **kwargs):
     '''
     Function: plot_total_counts()
-    Argument(s):        
+    Argument(s):
         total_open_counts           numpy array (int)
         total_unlabelled_counts     numpy array (int)
         issues_mix                  numpy array (int)
@@ -435,7 +464,7 @@ def plot_total_counts(total_open_counts, total_unlabelled_counts, issues_mix,
         end_index                   int - end month in the array
         bar_spacing                 float (matplotlib configuration value)
     Return Value(s): None
-    Plot the middle panel of the dataviz, including total open issues at start and 
+    Plot the middle panel of the dataviz, including total open issues at start and
     end of each month as well as total untriaged (unlabelled) issues.
     '''
     # first axis created is plotted first, with axis and labels on the left
@@ -514,7 +543,7 @@ def plot_total_counts(total_open_counts, total_unlabelled_counts, issues_mix,
                       total_unlabelled[i-1:i+1],
                       color="w", alpha=1, linewidth=3)
 
-        # define heatmaps for displaying monthly issue mix data 
+        # define heatmaps for displaying monthly issue mix data
         # determine color map to use (increasing/decreasing numbers and deadband around zero)
         # list growth (red, bad)
         if monthly_issues_mix[i] < -0.05:
@@ -533,7 +562,7 @@ def plot_total_counts(total_open_counts, total_unlabelled_counts, issues_mix,
         ax_mid_l.fill_between([start_narrow,finish_narrow],
                               total_open[i-1:i+1],
                               y2=0, color=col, alpha=1)
-    
+
         # top lines (open)
         ax_mid_l.plot([start_narrow,finish_narrow],
                       total_open[i-1:i+1],
@@ -542,7 +571,7 @@ def plot_total_counts(total_open_counts, total_unlabelled_counts, issues_mix,
         ax_mid.plot([start,finish],
                       total_unlabelled[i-1:i+1],
                       color="w", alpha=1, linewidth=0.3)
-    
+
         # ith total count boxes
         t = ax_mid_l.text(i+0.5, total_open[i]+(y_padding/4),
                           str(total_open[i]),
@@ -604,7 +633,7 @@ def adjacent_values(vals, q1, q3):
 def plot_age_distributions(issue_ages, month_labels, ax=None, **kwargs):
     '''
     Function: plot_age_distributions()
-    Argument(s):        
+    Argument(s):
         issue_ages                  numpy array (int)
         month_labels                numpy array ('Mon-YY') e.g. 'Jan-21'
         ax                          matplotlib axes
@@ -612,7 +641,7 @@ def plot_age_distributions(issue_ages, month_labels, ax=None, **kwargs):
         end_index                   int - end month in the array
         bar_spacing                 float (matplotlib configuration value)
     Return Value(s): None
-    Plot the middle panel of the dataviz, including total open issues at start and 
+    Plot the middle panel of the dataviz, including total open issues at start and
     end of each month as well as total untriaged (unlabelled) issues.
     '''
     # first axis created is plotted first, with axis and labels on the left
@@ -687,7 +716,7 @@ def plot_age_distributions(issue_ages, month_labels, ax=None, **kwargs):
     plt.vlines(inds[1:], whiskersMin, whiskersMax, color='k', linestyle='-', lw=1)
 
     plt.axis([0,len(ages),0,max_age])
-    plt.xticks(np.arange(labels.size), labels, rotation=60) 
+    plt.xticks(np.arange(labels.size), labels, rotation=60)
     plt.xlabel("Calendar Month")
     plt.ylabel(f"{issue_type} Age (days)", labelpad=10)
 
@@ -709,7 +738,7 @@ def output(args):
     if args['save_file'] is None:
         plt.show()
     else:
-        print(f"{gu.stacktrace()} INFO writing metrics image to file ({args['save_file']}).") 
+        print(f"{gu.stacktrace()} INFO writing metrics image to file ({args['save_file']}).")
         plt.savefig(args['save_file'])
 
 
@@ -738,7 +767,7 @@ def main() -> None:
 
     # optional debug functions
     # where needed, it's best to run these after data ingestion & analysis, but before plotting
-    if args['verbose_stats']: 
+    if args['verbose_stats']:
         db.show_issues(f"{args['issue_type']}")
 
     if args['summary_stats']:
@@ -758,7 +787,7 @@ def main() -> None:
 
     # calling code for topmost metrics dashboard (monthly counts)
     ax_top = plt.subplot(3,3,(2,3))
-    plot_monthly_counts(gd.opened_issue_counts, gd.closed_issue_counts, 
+    plot_monthly_counts(gd.opened_issue_counts, gd.closed_issue_counts,
                         ax=ax_top, start_idx=w_start, end_idx=w_end,
                         issue_type=args['issue_type'],
                         open_counts=gd.open_issue_counts,
@@ -768,14 +797,14 @@ def main() -> None:
     # calling code for middle metrics dashboard (total counts)
     ax_mid = plt.subplot(3,3,(5,6))
     plot_total_counts(gd.total_open_issue_counts, gd.total_unlabelled_issue_counts, gd.monthly_issues_mix,
-                      fig=fig, ax=ax_mid, start_idx=w_start, end_idx=w_end, 
+                      fig=fig, ax=ax_mid, start_idx=w_start, end_idx=w_end,
                       issue_type=args['issue_type'],
                       bar_spacing=bar_spacing)
 
     # calling code for middle metrics dashboard (total counts)
     ax_bottom = plt.subplot(3,3,(8,9))
     plot_age_distributions(gd.issue_ages, gd.month_labels,
-                           ax=ax_bottom, start_idx=w_start, end_idx=w_end, 
+                           ax=ax_bottom, start_idx=w_start, end_idx=w_end,
                            issue_type=args['issue_type'],
                            bar_spacing=bar_spacing)
 
