@@ -1,3 +1,43 @@
+'''
+RepoDash, by Laurence Molloy - (c) 2019
+
+Filename:   GithubIssues.py
+Purpose:    generate a performance metrics dashboard for a github repository
+            (supporting class libraries for RepoDash.py)
+
+CLASSES IN THIS FILE:
+bcolors             colour definitions for logging & exceptions output
+GithubIssuesUtils   general utility methods
+                    (command line argument processing, debugging, logging)
+GithubIssuesAPI     methods for interacting with Github's public API
+GithubIssuesDB      methods for interacting with SQLite DB
+GithubIssuesData    methods & list attributes for managing aggregated metrics
+
+POSSIBLE FUTURE IMPROVEMENTS:
+1. consider adopting Will McGugan's Rich for logging & exceptions output
+2. consider refactoring RepoDash.py plotting fns as a GithubIssuesPlot class
+3. provide & maintain a single-location lookup for status codes used & meanings
+
+Version History:
+VERSION DATE           AUTHORED-BY          REVIEWED-BY
+================================================================================
+0.1     31/12/2019     Laurence Molloy
+initial release - supports any public repositories
+--------------------------------------------------------------------------------
+0.2     02/01/2020     Laurence Molloy
+Personal access tokens (increased requests/min), triage metrics & bug fixes
+--------------------------------------------------------------------------------
+0.3     07/02/2020     Laurence Molloy
+Saving output to file, grouped label metrics & improved documentation
+--------------------------------------------------------------------------------
+0.4     03/12/2020     Laurence Molloy
+Github Enterprise repositories
+--------------------------------------------------------------------------------
+1.0     11/02/2023     Laurence Molloy
+Code refactoring & improved documentation
+================================================================================
+'''
+
 import os
 import sys
 import argparse
@@ -23,6 +63,8 @@ import matplotlib
 
 
 class bcolors:
+    """colour definitions for debug/log output"""
+
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
     OKGREEN = '\033[92m'
@@ -34,7 +76,8 @@ class bcolors:
 
 
 class GithubIssuesUtils:
-    
+    """general utility methods, incl command line argument processing, debugging, logging"""
+
     def __init__(self):
         self.__status = 0
         self.__data_path = str(os.path.dirname(sys._getframe().f_code.co_filename)) + '/../data'
@@ -253,6 +296,7 @@ class GithubIssuesUtils:
 
 
 class GithubIssuesAPI:
+    """methods for interacting with Github's public API"""
 
     def __init__(self):
         self.__status        = 0
@@ -369,11 +413,9 @@ class GithubIssuesAPI:
         return int(self.__response.headers['X-RateLimit-Remaining'])
 
 
-
-
 class GithubIssuesDB:
-    
-    
+    """methods for interacting with SQLite DB"""
+
     def __init__(self, db_name, db_table="issues", echo=False):
         db_connection_url = "sqlite:///" + str(db_name) + ".db"
         self.engine = create_engine(db_connection_url, echo=echo)
@@ -1203,6 +1245,7 @@ class GithubIssuesDB:
 
 
 class GithubIssuesData:
+    """methods & list attributes for managing aggregated metrics"""
 
     def __init__(self):
         self.__status                  = 0
