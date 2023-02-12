@@ -1,5 +1,5 @@
 '''
-RepoDash, by Laurence Molloy - (c) 2019
+RepoDash, by Laurence Molloy - (c) 2019-2023
 
 Filename:   GithubIssues.py
 Purpose:    generate a performance metrics dashboard for a github repository
@@ -14,9 +14,11 @@ GithubIssuesDB      methods for interacting with SQLite DB
 GithubIssuesData    methods & list attributes for managing aggregated metrics
 
 POSSIBLE FUTURE IMPROVEMENTS:
-1. consider adopting Will McGugan's Rich for logging & exceptions output
-2. consider refactoring RepoDash.py plotting fns as a GithubIssuesPlot class
-3. provide & maintain a single-location lookup for status codes used & meanings
+1. develop a diff/update solution - minimize unnecessary re-scraping of data
+2. refactor RepoDash.py plotting fns as a GithubIssuesPlot class
+3. provide & maintain a lookup table for status codes returned & meanings
+4. adopt Will McGugan's 'rich' module for logging & exceptions output
+5. develop this into a browser-based solution
 
 Version History:
 VERSION DATE           AUTHORED-BY          REVIEWED-BY
@@ -33,7 +35,7 @@ Saving output to file, grouped label metrics & improved documentation
 0.4     03/12/2020     Laurence Molloy
 Github Enterprise repositories
 --------------------------------------------------------------------------------
-1.0     11/02/2023     Laurence Molloy
+1.0     12/02/2023     Laurence Molloy
 Code refactoring & improved documentation
 ================================================================================
 '''
@@ -82,17 +84,24 @@ class GithubIssuesUtils:
         self.__status = 0
         self.__data_path = str(os.path.dirname(sys._getframe().f_code.co_filename)) + '/../data'
 
-
+    # getter, setter & property definition for accessing
+    # the private [__data_path] class attribute
     def __get_data_path(self) -> str:
         return self.__data_path
-
     def __set_data_path(self, path : str):
         self.__data_path = path
-
     data_path = property(__get_data_path, __set_data_path)
 
-
+    # getter, setter & property definition for accessing
+    # the private [__args] class attribute
     def __get_args(self) -> dict:
+        '''
+    Class: GithubIssuesUtils 
+    Method: __get_args()
+    Argument(s): None
+    Return Value(s): Dictionary (command-line parameters)
+    Return a dictionary of command-line paramtewr values.
+        '''
         return {'auth_token'     : self.__auth_token,
                 'fqdn'           : self.__fqdn,
                 'https'          : self.__https,
@@ -112,18 +121,22 @@ class GithubIssuesUtils:
                 'summary_stats'  : self.__summary_stats,
                 'verbose_stats'  : self.__verbose_stats
                 }
-
-
     def __set_args(self, args : dict):
         for arg in args:
             # obtain 'mangled' version of private attribute name
             private_attr = '_GithubIssuesUtils__' + str(arg)
             setattr(self, private_attr, args[arg])
-
     args = property(__get_args, __set_args)
 
 
     def process_args(self) -> dict:
+        '''
+    Class: GithubIssuesUtils 
+    Method: process_args()
+    Argument(s): None
+    Return Value(s): Dictionary (command-line parameters)
+    Check and process all command line arguments. Return a dictionary of values.
+        '''
         arg_parser = argparse.ArgumentParser()
         arg_parser.add_argument('-a', '--authtoken', type=str, default='',
                             help="Github personal access token (default='')")
@@ -282,6 +295,14 @@ class GithubIssuesUtils:
     
 
     def stacktrace(self) -> str:
+        """
+    Class: GithubIssuesUtils
+    Method: stacktrace()
+    Argument(s): None
+    Return Value(s): String
+    Returns a string containing file, function & line number of the calling code 
+    for insertion into a log message.
+        """
         filename    = (re.findall("([^/]*)$", sys._getframe().f_back.f_code.co_filename))[0]
         caller      = sys._getframe().f_back.f_code.co_name
         line_number = sys._getframe().f_back.f_lineno
@@ -289,6 +310,13 @@ class GithubIssuesUtils:
 
 
     def exception(self, e: str, exception_type: str) -> str:
+        """
+    Class: GithubIssuesUtils
+    Method: exception()
+    Argument(s): None
+    Return Value(s): String
+    Returns a formatted exceptions string for output to the terminal
+        """
         exception_string  = f"{bcolors.FAIL}\n======== {exception_type} EXCEPTION - START ========\n"
         exception_string += str(e)
         exception_string += f"\n========= {exception_type} EXCEPTION - END =========\n{bcolors.ENDC}"
@@ -417,6 +445,7 @@ class GithubIssuesDB:
     """methods for interacting with SQLite DB"""
 
     def __init__(self, db_name, db_table="issues", echo=False):
+        self.__utils = GithubIssuesUtils()
         db_connection_url = "sqlite:///" + str(db_name) + ".db"
         self.engine = create_engine(db_connection_url, echo=echo)
         self.repository_id = 0
@@ -431,7 +460,6 @@ class GithubIssuesDB:
 
     def __reset_tables(self):
         '''
-    ~~~ OBJECT-INTERNAL METHOD ~~~
     Class: GithubIssuesDB
     Method: __reset_tables()
     Argument(s): None
@@ -447,8 +475,9 @@ class GithubIssuesDB:
             self.status = 0
         except Exception as e:
             self.status = 99
-            print(f"{self.stacktrace()} ERROR {self.status} failed to reset db tables.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} failed to reset db tables.")
+            print(self.__utils.exception(e, 'SQL'))
+
 
     def __set_table(self, table_name):
         if table_name in list(self.allowable_tables.values()):
@@ -456,25 +485,11 @@ class GithubIssuesDB:
             self.status = 0
         else:
             self.status = 1
-            print(f"{self.stacktrace()} ERROR {self.status} '{table_name}' table is not supported.")
-            print(f"{self.stacktrace()} WARN {self.status} current table ('{self.table}') remains unchanged.")
-            print(f"{self.stacktrace()} INFO supported tables = {list(self.allowable_tables.values())}.")
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{table_name}' table is not supported.")
+            print(f"{self.__utils.stacktrace()} WARN {self.status} current table ('{self.table}') remains unchanged.")
+            print(f"{self.__utils.stacktrace()} INFO supported tables = {list(self.allowable_tables.values())}.")
             exit()
         return self.status
-
-
-    def stacktrace(self):
-        filename    = (re.findall("([^/]*)$", sys._getframe(  ).f_back.f_code.co_filename))[0]
-        caller      = sys._getframe().f_back.f_code.co_name
-        line_number = sys._getframe().f_back.f_lineno
-        return f"{bcolors.BOLD}[{filename} : {caller} : {line_number}]{bcolors.ENDC}"
-
-
-    def print_exception(self, e, exception_type):
-        exception_string  = f"{bcolors.FAIL}\n======== {exception_type} EXCEPTION - START ========\n"
-        exception_string += str(e)
-        exception_string += f"\n========= {exception_type} EXCEPTION - END =========\n{bcolors.ENDC}"
-        print (exception_string)
 
 
     def get_table(self):
@@ -502,38 +517,41 @@ class GithubIssuesDB:
             return result.iloc[0,0]
         except Exception as e:
             self.status = 2
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
             return 'unknown'
 
 
     def drop_table(self,type):
         status = self.__set_table(self.allowable_tables[type])
-        print(f"{self.stacktrace()} INFO dropping '{self.table}' table...")
+        print(f"{self.__utils.stacktrace()} INFO dropping '{self.table}' table...")
         try:
-            sql = "DROP TABLE %s" % (self.table,)
+            sql = "DROP TABLE IF EXISTS %s" % (self.table,)
             self.engine.execute(sql)
             self.status = 0
         except Exception as e:
             self.status = 3
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
         return self.status
 
 
     def drop_db(self):
-        print(f"{self.stacktrace()} INFO deleting '{self.db_file}' database file...")
+        print(f"{self.__utils.stacktrace()} INFO deleting '{self.db_file}' database file...")
         if os.path.exists(self.db_file):
             try:
                 os.remove(self.db_file)
                 self.status = 0
             except Exception as e:
                 self.status = 15
-                print(f"{self.stacktrace()} ERROR {self.status} cannot delete '{self.db_file}' database file.")
-                self.print_exception(e, 'OS')
+                print(f"{self.__utils.stacktrace()} ERROR {self.status} cannot delete '{self.db_file}' database file.")
+                print(self.__utils.exception(e, 'OS'))
+                exit()
         else:
             self.status = 16
-            print(f"{self.stacktrace()} WARN {self.status} '{self.db_file}' does not exist. Ignoring.")
+            print(f"{self.__utils.stacktrace()} WARN {self.status} '{self.db_file}' does not exist. Ignoring.")
+            exit()
         return self.status
 
 
@@ -563,8 +581,9 @@ class GithubIssuesDB:
                 self.status = 0
             except Exception as e:
                 self.status = 4
-                print(f"{self.stacktrace()} ERROR {self.status} unable to create '{self.table}' table.\n")
-                self.print_exception(e, 'SQL')
+                print(f"{self.__utils.stacktrace()} ERROR {self.status} unable to create '{self.table}' table.\n")
+                print(self.__utils.exception(e, 'SQL'))
+                exit()
         elif self.table == 'issue_labels':
             try:
                 sql = '''
@@ -580,11 +599,12 @@ class GithubIssuesDB:
                 self.status = 0
             except Exception as e:
                 self.status = 29
-                print(f"{self.stacktrace()} ERROR {self.status} unable to create '{self.table}' table.\n")
-                self.print_exception(e, 'SQL')
+                print(f"{self.__utils.stacktrace()} ERROR {self.status} unable to create '{self.table}' table.\n")
+                print(self.__utils.exception(e, 'SQL'))
+                exit()
         else:
             self.status = 5
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table is not supported.")
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table is not supported.")
         return self.status
 
 
@@ -603,8 +623,9 @@ class GithubIssuesDB:
                 return False
         except Exception as e:
             self.status = 6
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.\n")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.\n")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
 
 
     def insert_label(self, label):
@@ -630,8 +651,9 @@ class GithubIssuesDB:
             self.status = 0
         except Exception as e:
             self.status = 30
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table insertion failure.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table insertion failure.")
+            print(self.__utils.exception(e, 'SQL INSERTION'))
+            exit()
         return self.status
 
 
@@ -691,8 +713,9 @@ class GithubIssuesDB:
             self.status = 0
         except Exception as e:
             self.status = 7
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table insertion failure.")
-            self.print_exception(e, 'SQL')    
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table insertion failure.")
+            print(self.__utils.exception(e, 'SQL INSERTION'))    
+            exit()
         return self.status
 
 
@@ -706,8 +729,9 @@ class GithubIssuesDB:
             self.status = 0
         except Exception as e:
             self.status = 31
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' SQL retrieval failed.\n")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' SQL retrieval failed.\n")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
         return table
 
 
@@ -723,8 +747,9 @@ class GithubIssuesDB:
             self.status = 0
         except Exception as e:
             self.status = 31
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' SQL update failed.\n")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' SQL update failed.\n")
+            print(self.__utils.exception(e, 'SQL UPDATE'))
+            exit()
         return self.status
 
 
@@ -742,8 +767,9 @@ class GithubIssuesDB:
             return results.iloc[0][0]
         except Exception as e:
             self.status = 32
-            print(f"{self.stacktrace()} ERROR {self.status} issue label '{label}' does not exist.\n")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} issue label '{label}' does not exist.\n")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
             return "Unknown Type"
 
 
@@ -775,8 +801,9 @@ class GithubIssuesDB:
             return_val_open = result_open.iloc[0,0]
         except Exception as e:
             self.status = 8
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL') 
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit() 
         try:           
             sql = '''
                         SELECT Count(*) FROM issues
@@ -790,8 +817,9 @@ class GithubIssuesDB:
             return_val_closed = result_closed.iloc[0,0]
         except Exception as e:
             self.status = 9
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
         return [return_val_open, return_val_closed]
     
 
@@ -828,12 +856,16 @@ class GithubIssuesDB:
             self.status = 0
         except Exception as e:
             self.status = 26
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
         return pd.DataFrame.from_dict(open_labels, orient='index', columns=['open_count'])
 
 
     def count_labels_monthly(self, issue_type, year, month):
+        '''
+    [THIS METHOD IS CURRENTLY NOT IN USE]
+        '''
         self.__set_table(self.allowable_tables['issues']) 
         opened_labels = {}
         open_labels = {}
@@ -855,8 +887,9 @@ class GithubIssuesDB:
             self.status = 0
         except Exception as e:
             self.status = 26
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
         #count labels used for issues that were opened during the month and are currently still open
         try:
             sql = '''
@@ -875,8 +908,9 @@ class GithubIssuesDB:
             self.status = 0
         except Exception as e:
             self.status = 27
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
         # count labels used for issues that were closed during the month
         try:           
             sql = '''
@@ -894,8 +928,9 @@ class GithubIssuesDB:
             self.status = 0
         except Exception as e:
             self.status = 28
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
 
         df_opened = pd.DataFrame.from_dict(opened_labels, orient='index', columns=['opened_count'])
         df_open = pd.DataFrame.from_dict(open_labels, orient='index', columns=['open_count'])
@@ -904,6 +939,9 @@ class GithubIssuesDB:
         return pd.concat([df_opened, df_open, df_closed], axis=1, sort=True, join='outer').fillna(0)
 
     def deprecated_count_labels(self, issue_type, year, month, label):
+        '''
+    [THIS METHOD HAS BEEN DEPRECATED]
+        '''
         self.__set_table(self.allowable_tables['issues']) 
         return_val_open   = 'unknown'
         return_val_closed = 'unknown'
@@ -921,8 +959,9 @@ class GithubIssuesDB:
             return_val_open = result_open.iloc[0,0]
         except Exception as e:
             self.status = 17
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL') 
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit() 
         try:           
             sql = '''
                         SELECT Count(*), INSTR(labelstring, "%s") as match FROM %s
@@ -937,8 +976,9 @@ class GithubIssuesDB:
             return_val_closed = result_closed.iloc[0,0]
         except Exception as e:
             self.status = 18
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
         return [return_val_open, return_val_closed]
 
 
@@ -970,8 +1010,9 @@ class GithubIssuesDB:
             return count
         except Exception as e:
             self.status = 21
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
 
 
     def count_monthly_unlabelled(self, issue_type, year, month):
@@ -1004,8 +1045,9 @@ class GithubIssuesDB:
             return count
         except Exception as e:
             self.status = 22
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
 
 
     def count_monthly_unassigned(self, issue_type, year, month):
@@ -1038,12 +1080,14 @@ class GithubIssuesDB:
             return count
         except Exception as e:
             self.status = 25
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
 
 
     def count_labelled(self, issue_type, year, month):
         '''
+    [THIS METHOD IS CURRENTLY NOT IN USE]
     Class: GithubIssuesDB
     Method: count_labelled()
     Argument(s):
@@ -1072,8 +1116,9 @@ class GithubIssuesDB:
             return_val_open = result_open.iloc[0,0]
         except Exception as e:
             self.status = 23
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL') 
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit() 
         try:           
             sql = '''
                         SELECT Count(*) FROM %s
@@ -1088,24 +1133,25 @@ class GithubIssuesDB:
             return_val_closed = result_closed.iloc[0,0]
         except Exception as e:
             self.status = 24
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
         return [return_val_open, return_val_closed]
     
 
     def __get_monthly_span(self):
         [ start_month, end_month ] = self.get_month_range()
-        print(f"{self.stacktrace()} INFO data span is start=" + str(start_month) + " , end=" + str(end_month))
+        print(f"{self.__utils.stacktrace()} INFO data span is start=" + str(start_month) + " , end=" + str(end_month))
         date_range = pd.date_range(start=start_month,
                                    end=pd.Period.to_timestamp(pd.Period(end_month, 'M') + 1),
                                    closed=None, freq='M')
         if date_range.size == 0:
             self.status = 19
-            print(f"{self.stacktrace()} ERROR {self.status} record date range is empty")
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} record date range is empty")
         elif date_range.size == 1:
             self.status = 20
-            print(f"{self.stacktrace()} ERROR {self.status} record date range only 1 month long. Minimum of 2 months history required")
-            print(f"{self.stacktrace()} INFO record date range = {date_range}")
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} record date range only 1 month long. Minimum of 2 months history required")
+            print(f"{self.__utils.stacktrace()} INFO record date range = {date_range}")
         else:
             self.status = 0
             return date_range
@@ -1127,13 +1173,13 @@ class GithubIssuesDB:
             self.status = 0
             if result.empty:
                 self.status = 10
-                print(f"{self.stacktrace()} ERROR {self.status} SELECT statement returned no data. Cannot identify issue/pr date range\n")
+                print(f"{self.__utils.stacktrace()} ERROR {self.status} SELECT statement returned no data. Cannot identify issue/pr date range\n")
                 exit()
             return [ pd.to_datetime(result.iloc[0,0]).strftime('%Y-%m-%d'), pd.to_datetime(result.iloc[0,1]).strftime('%Y-%m-%d') ]
         except Exception as e:
             self.status = 11
-            print(f"{self.stacktrace()} ERROR {self.status} general SQL error.\n")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} general SQL error.\n")
+            print(self.__utils.exception(e, 'SQL'))
             exit()
 
     def get_issue_ages(self, issue_type, month_end_date):
@@ -1169,8 +1215,8 @@ class GithubIssuesDB:
             if result.empty:
                 month = calendar.month_abbr[month_end_date.month]
                 year = month_end_date.year
-                print(f"{self.stacktrace()} WARN no open {issue_type}s remained at month end for {month} {year}.")
-                print(f"{self.stacktrace()} WARN returning an empty dataframe.")
+                print(f"{self.__utils.stacktrace()} WARN no open {issue_type}s remained at month end for {month} {year}.")
+                print(f"{self.__utils.stacktrace()} WARN returning an empty dataframe.")
                 # create a minimal dataframe (required to keep box & violin plots happy)
                 result = pd.DataFrame([float('nan'), float('nan')])
                 return result
@@ -1178,9 +1224,11 @@ class GithubIssuesDB:
             return result.applymap(lambda x: (month_end_date - x).days)
         except Exception as e:
             self.status = 12
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.\n")
-            self.print_exception(e, 'SQL')
-            return "unknown"
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.\n")
+            print(self.__utils.exception(e, 'SQL'))
+            # create a minimal dataframe (required to keep box & violin plots happy)
+            result = pd.DataFrame([float('nan'), float('nan')])
+            return result
         
     
     def show_issues(self, issue_type):
@@ -1200,9 +1248,9 @@ class GithubIssuesDB:
             print(result)
         except Exception as e:
             self.status = 13
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.\n")
-            self.print_exception(e, 'SQL')
-            
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.\n")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
         return self.status
 
 
@@ -1217,10 +1265,10 @@ class GithubIssuesDB:
             self.status = 0
         except Exception as e:
             self.status = 14
-            print(f"{self.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.\n")
-            self.print_exception(e, 'SQL')
+            print(f"{self.__utils.stacktrace()} ERROR {self.status} '{self.table}' table does not exist.\n")
+            print(self.__utils.exception(e, 'SQL'))
+            exit()
         return result.iloc[0,0]
-
 
 
     def show_statistics(self, date_range):

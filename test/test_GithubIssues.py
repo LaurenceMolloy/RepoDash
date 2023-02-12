@@ -1,3 +1,14 @@
+'''
+RepoDash, by Laurence Molloy - (c) 2019-2023
+
+Filename:   test_GithubIssues.py
+Purpose:    test code that exercises all GithubISsues module functionality 
+            including a range of edge cases
+
+NOTES:
+1. this is a work in progress and is known to be incomplete - needs more work
+'''
+
 import os
 import sys
 sys.path.insert(0, "../src/")

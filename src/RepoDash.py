@@ -1,5 +1,5 @@
 '''
-RepoDash, by Laurence Molloy - (c) 2019
+RepoDash, by Laurence Molloy - (c) 2019-2023
 
 Filename:   RepoDash.py
 Purpose:    generate a performance metrics dashboard for a github repository
@@ -30,7 +30,7 @@ Saving output to file, grouped label metrics & improved documenatation
 0.4     03/12/2020     Laurence Molloy
 Github Enterprise repositories
 --------------------------------------------------------------------------------
-1.0     11/02/2023     Laurence Molloy
+1.0     12/02/2023     Laurence Molloy
 Code refactoring & improved documenatation
 ================================================================================
 '''
@@ -517,9 +517,6 @@ def plot_total_counts(total_open_counts, total_unlabelled_counts, issues_mix,
         start  = i - (0.5-bar_spacing)
         finish = i + (0.5-bar_spacing)
 
-        #start_unl  = i - 0.5
-        #finish_unl = i + 0.5
-
         start_narrow  = i - ((0.5-bar_spacing)*0.8)
         finish_narrow = i + ((0.5-bar_spacing)*0.8)
 
@@ -534,9 +531,9 @@ def plot_total_counts(total_open_counts, total_unlabelled_counts, issues_mix,
                               y2=0, facecolor='w', alpha=1)
 
         # fill areas (unlabelled)
-        ax_mid_r.fill_between([start,finish],
-                              total_unlabelled[i-1:i+1],
-                              y2=0, facecolor='r', alpha=0.2)
+        #ax_mid_r.fill_between([start,finish],
+        #                      total_unlabelled[i-1:i+1],
+        #                      y2=0, facecolor='r', alpha=0.2)
 
         # top lines (unlabelled)
         ax_mid_r.plot([start,finish],
